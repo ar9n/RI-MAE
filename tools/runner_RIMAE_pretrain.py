@@ -126,6 +126,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
             elif dataset_name == 'ModelNet':
                 points = data[0].to(device)
                 points = misc.fps(points, npoints)   
+            elif dataset_name == 'EngineeringShapeBenchmark':
+                points = data.to(device)
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
 
