@@ -61,14 +61,14 @@ class EngineeringShapeBenchmark(data.Dataset):
 
         self.rot = config.get('rot', False)
 
-        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'ESB')
-        print_log(f'[DATASET] Open file {self.data_list_file}', logger = 'ESB')
+        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'EngineeringShapeBenchmark')
+        print_log(f'[DATASET] Open file {self.data_list_file}', logger = 'EngineeringShapeBenchmark')
         with open(self.data_list_file, 'r') as f:
             lines = f.readlines()
         if self.whole:
             with open(test_data_list_file, 'r') as f:
                 test_lines = f.readlines()
-            print_log(f'[DATASET] Open file {test_data_list_file}', logger = 'ESB')
+            print_log(f'[DATASET] Open file {test_data_list_file}', logger = 'EngineeringShapeBenchmark')
             lines = test_lines + lines
         self.file_list = []
         for line in lines:
@@ -82,7 +82,7 @@ class EngineeringShapeBenchmark(data.Dataset):
                 'object_name': object_name,
                 'file_path': line
             })
-        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'ESB')
+        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'EngineeringShapeBenchmark')
 
     def pc_norm(self, pc):
         """ pc: NxC, return NxC """
