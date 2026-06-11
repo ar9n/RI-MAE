@@ -16,9 +16,9 @@ dataset : {
   train : { _base_: cfgs/dataset_configs/ShapeNet-55.yaml, 
             others: {subset: 'train', npoints: 1024, whole: True}},
   val : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'test', bs: 1}},
+            others: {subset: 'train', npoints: 1024, bs: 1, whole: True}},
   val_rot : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'test_rot', bs: 1}}}
+            others: {subset: 'train', npoints: 1024, bs: 1, whole: True}}}
 model : {
   NAME: RI_MAE, 
   mask_rand: True,
@@ -26,7 +26,7 @@ model : {
   use_emd: False,
   
   transformer_config: {
-    mask_ratio: [0.75, 0.75], 
+    mask_ratio: [0.70, 0.70], 
     trans_dim: 384, 
     depth_encoder: 12, 
     depth_predictor: 1, 
@@ -50,3 +50,4 @@ clip_gradients: True
 clip_grad: 3.0
 
 consider_metric: CDL1
+evaluate_retrieval_acc: True
