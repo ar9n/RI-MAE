@@ -36,7 +36,7 @@ def main():
 
     PICKLE_PATH = "feature_dict.pkl"
 
-    if os.path.exists(PICKLE_PATH):
+    if os.path.exists(PICKLE_PATH) and args.resume:
         print(f"Loading existing feature dict from {PICKLE_PATH}")
         with open(PICKLE_PATH, "rb") as f:
             feature_dict = pickle.load(f)
@@ -64,8 +64,6 @@ def main():
             pickle.dump(feature_dict, f)
 
     NN_precision(feature_dict)
-    visualize_features(feature_dict, highlight_category="Gear like Parts")
-
 
 
 def NN_precision(feature_dict):
@@ -90,53 +88,6 @@ def NN_precision(feature_dict):
     print(f"Nearest neighbor precision: {precision:.4f}")
 
 
-def visualize_features(feature_dict, highlight_category="Gear like Parts"):
-    """Reduce features to 2D with t-SNE and plot, highlighting one category in red."""
-    names = list(feature_dict.keys())
-    features = np.vstack([feature_dict[n]["feature"] for n in names])
-    categories = [feature_dict[n]["category"] for n in names]
-
-    # Reduce to 2D
-    tsne = TSNE(n_components=2, random_state=42, perplexity=min(30, len(names) - 1))
-    features_2d = tsne.fit_transform(features)
-
-    # Plot
-    fig, ax = plt.subplots(figsize=(10, 8))
-
-    # All other categories in grey
-    other_mask = [c != highlight_category for c in categories]
-    ax.scatter(
-        features_2d[other_mask, 0],
-        features_2d[other_mask, 1],
-        c="lightgrey",
-        s=10,
-        label="Other",
-        alpha=0.6,
-    )
-
-    # Highlighted category in red
-    highlight_mask = [c == highlight_category for c in categories]
-    ax.scatter(
-        features_2d[highlight_mask, 0],
-        features_2d[highlight_mask, 1],
-        c="red",
-        s=20,
-        label=highlight_category,
-        alpha=0.9,
-    )
-
-    ax.legend()
-    ax.set_title(f"t-SNE feature space — '{highlight_category}' highlighted")
-    ax.set_xlabel("t-SNE dim 1")
-    ax.set_ylabel("t-SNE dim 2")
-    plt.tight_layout()
-    plt.savefig("features_tsne.png", dpi=150)
-    print("Saved plot to features_tsne.png")
-    plt.show()
-
-
-
 if __name__ == '__main__':
-
     main()
 
