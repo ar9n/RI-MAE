@@ -13,6 +13,7 @@ from utils.AverageMeter import AverageMeter
 import math
 from sklearn.svm import LinearSVC
 from sklearn.svm import SVC
+from sklearn.neighbors import NearestNeighbors
 import numpy as np
 from torchvision import transforms
 from datasets import data_transforms
@@ -48,6 +49,20 @@ def evaluate_svm(train_features, train_labels, test_features, test_labels):
     clf.fit(train_features, train_labels)
     pred = clf.predict(test_features)
     return np.sum(test_labels == pred) * 1. / pred.shape[0]
+
+def NN_precision(features, labels):
+    nbrs = NearestNeighbors(n_neighbors=2, algorithm="ball_tree").fit(features)
+    _, indices = nbrs.kneighbors(features)
+
+    correct = 0
+    total = len(labels)
+
+    for i in range(total):
+        if labels[i] == labels[indices[i, 1]]:
+            correct += 1
+
+    return correct / total if total > 0 else 0.0
+
 
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
@@ -195,8 +210,12 @@ def run_net(args, config, train_writer=None, val_writer=None):
 
         if epoch % args.val_freq == 0:# and epoch != 0:
             # Validate the current model
-            metrics = validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_writer, args, config, logger=logger, rot=False)
-            rot_metrics = validate(base_model, extra_train_dataloader, test_rot_dataloader, epoch, val_writer, args, config, logger=logger, rot=True)
+            if config.get('evaluate_retrieval_acc'):
+                metrics = validate_ESB(base_model, test_dataloader, epoch, val_writer, args, config, logger=logger, rot=False)
+                rot_metrics = validate_ESB(base_model, test_rot_dataloader, epoch, val_writer, args, config, logger=logger, rot=True)
+            else:
+                metrics = validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_writer, args, config, logger=logger, rot=False)
+                rot_metrics = validate(base_model, extra_train_dataloader, test_rot_dataloader, epoch, val_writer, args, config, logger=logger, rot=True)
 
             # Save ckeckpoints
             if metrics.better_than(best_metrics):
@@ -280,6 +299,73 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
 
     return Acc_Metric(svm_acc)
 
+def validate_ESB(base_model, test_dataloader, epoch, val_writer, args, config, logger = None, rot=False):
+    if rot:
+        print_log(f"[VALIDATION_ROT] Start validating epoch {epoch}", logger=logger)
+    else:
+        print_log(f"[VALIDATION] Start validating epoch {epoch}", logger=logger)
+
+    base_model.eval()
+    test_features = []
+    test_labels = []
+    test_object_names = []
+    npoints = 1024
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    with torch.no_grad():
+        for _, (category, object_name, data) in enumerate(test_dataloader):
+            points = data.to(device)
+            points = misc.fps(points, npoints)
+            assert points.size(1) == npoints
+
+            feature = base_model(points, noaug=True)
+            test_features.append(feature.detach().cpu().numpy())
+
+            # keep all labels and names in batch
+            if isinstance(category, (list, tuple)):
+                test_labels.extend(list(category))
+            else:
+                test_labels.append(category)
+            
+            if isinstance(object_name, (list, tuple)):
+                test_object_names.extend(list(object_name))
+            else:
+                test_object_names.append(object_name)
+
+        test_features = np.concatenate(test_features, axis=0)
+
+        if not rot:
+            # Create feature dictionary
+            feature_dict = {}
+            for i, name in enumerate(test_object_names):
+                feature_dict[name] = {
+                    'category': test_labels[i],
+                    'feature': test_features[i].tolist()  # convert to list for JSON serialization
+                }
+
+            # Save to JSON
+            json_path = os.path.join(args.experiment_path, f"features/ESB_features_{epoch}.json")
+            os.makedirs(os.path.dirname(json_path), exist_ok=True)  # Create directory if it doesn't exist
+            with open(json_path, 'w') as f:
+                json.dump(feature_dict, f, indent=2)
+            print_log(f"Saved feature dictionary to {json_path}", logger=logger)
+
+        # string-label gather is not supported here; skip distributed gather for labels
+        retrieval_acc = NN_precision(test_features, test_labels)
+
+        if rot:
+            print_log('[Validation_ROT] EPOCH: %d  acc = %.4f' % (epoch, retrieval_acc), logger=logger)
+        else:
+            print_log('[Validation] EPOCH: %d  acc = %.4f' % (epoch, retrieval_acc), logger=logger)
+
+        if args.distributed:
+            torch.cuda.synchronize()
+
+    if val_writer is not None:
+        val_writer.add_scalar('Metric/ACC', retrieval_acc, epoch)
+
+    return Acc_Metric(retrieval_acc)
+
 def test_net(args, config):
     logger = get_logger(args.log_name)
     print_log('Tester start ... ', logger = logger)
@@ -357,4 +443,3 @@ def test_tsne(base_model, args, config, logger = None):
         
         return train_features, train_label, test_features, test_label
 
-       
