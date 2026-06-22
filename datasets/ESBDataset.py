@@ -1,6 +1,7 @@
 import os
 import torch
 import trimesh
+import json
 import numpy as np
 import torch.utils.data as data
 from pathlib import Path
@@ -53,8 +54,10 @@ class EngineeringShapeBenchmark(data.Dataset):
         self.data_root = config.DATA_PATH
         self.subset = config.subset
         
-        self.data_list_file = os.path.join(self.data_root, f'{self.subset}.txt')
-        test_data_list_file = os.path.join(self.data_root, 'test.txt')
+        self.train_data_list_file = os.path.join(self.data_root, 'train.txt')
+        self.test_data_list_file = os.path.join(self.data_root, 'test.txt')
+        with open(os.path.join(self.data_root, 'label_map.json'), 'r', encoding='utf-8') as f:
+            self.label_map = json.load(f)
         
         self.sample_points_num = config.npoints
         self.whole = config.get('whole')
@@ -62,22 +65,24 @@ class EngineeringShapeBenchmark(data.Dataset):
         self.rot = config.get('rot', False)
 
         print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'EngineeringShapeBenchmark')
-        print_log(f'[DATASET] Open file {self.data_list_file}', logger = 'EngineeringShapeBenchmark')
-        with open(self.data_list_file, 'r') as f:
-            lines = f.readlines()
-        if self.whole:
-            with open(test_data_list_file, 'r') as f:
-                test_lines = f.readlines()
-            print_log(f'[DATASET] Open file {test_data_list_file}', logger = 'EngineeringShapeBenchmark')
-            lines = test_lines + lines
+        
+        lines = []
+        if self.whole or self.subset == 'train':
+            print_log(f'[DATASET] Open file {self.train_data_list_file}', logger = 'EngineeringShapeBenchmark')
+            with open(self.train_data_list_file, 'r') as f:
+                lines = lines + f.readlines()
+        if self.whole or self.subset == 'test':
+            print_log(f'[DATASET] Open file {self.test_data_list_file}', logger = 'EngineeringShapeBenchmark')
+            with open(self.test_data_list_file, 'r') as f:
+                lines = lines + f.readlines()
+            
         self.file_list = []
+
         for line in lines:
             line = line.strip()
-            super_class = line.split('/')[0]
-            category = line.split('/')[1]
+            category = line.split('/')[0] + '/' + line.split('/')[1]
             object_name = line.split('/')[2]
             self.file_list.append({
-                'super_class': super_class,
                 'category': category,
                 'object_name': object_name,
                 'file_path': line
@@ -106,7 +111,7 @@ class EngineeringShapeBenchmark(data.Dataset):
         if self.rot:
             data = data @ rnd_rot()
         data = torch.from_numpy(data).float()
-        return sample['category'], sample['object_name'], data
+        return sample['category'], sample['object_name'], (data, self.label_map[sample['category']])
 
     def __len__(self):
         return len(self.file_list)
