@@ -14,40 +14,29 @@ scheduler: {
 
 dataset : {
   train : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'train', npoints: 1024, whole: True}},
+            others: {subset: 'train', npoints: 1024}},
   val : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'train', npoints: 1024, bs: 1, whole: True}},
-  val_rot : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'train', npoints: 1024, bs: 1, whole: True}}}
+            others: {subset: 'test', npoints: 1024}},
+  test : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
+            others: {subset: 'test', npoints: 1024}}}
+
 model : {
-  NAME: RI_MAE, 
-  mask_rand: True,
-  use_cutmix: False,
-  use_emd: False,
-  
-  transformer_config: {
-    mask_ratio: [0.75, 0.75], 
-    trans_dim: 384, 
-    depth_encoder: 12, 
-    depth_predictor: 1, 
-    drop_path_rate: 0.1, 
-    cls_dim: 512, 
-    num_heads: 6,  
-    group_size: 32, 
-    num_group: 64, 
-    encoder_dims: 256, 
-  },
-
-  ema_decay: 0.99,
-  ema_end_decay: 0.9996,
-  ema_anneal_end_step: 10000
+  NAME: RITransformer_MAE,
+  trans_dim: 384, 
+  depth: 12, 
+  drop_path_rate: 0.1, 
+  cls_dim: 45, 
+  num_heads: 6,
+  group_size: 32, 
+  num_group: 64, 
+  encoder_dims: 256,
+  use_dropout: False,
 }
-
-total_bs : 128
+npoints: 1024
+total_bs : 32
 step_per_update : 1
 max_epoch : 300
-clip_gradients: True
-clip_grad: 3.0
+grad_norm_clip : 10
+#1512
 
 consider_metric: CDL1
-evaluate_retrieval_acc: True
