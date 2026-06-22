@@ -50,7 +50,7 @@ def evaluate_svm(train_features, train_labels, test_features, test_labels):
     pred = clf.predict(test_features)
     return np.sum(test_labels == pred) * 1. / pred.shape[0]
 
-def NN_precision(features, labels):
+def evaluate_nn_precision(features, labels):
     nbrs = NearestNeighbors(n_neighbors=2, algorithm="ball_tree").fit(features)
     _, indices = nbrs.kneighbors(features)
 
@@ -143,6 +143,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
                 points = misc.fps(points, npoints)   
             elif dataset_name == 'EngineeringShapeBenchmark':
                 points = data.to(device)
+            elif dataset_name == 'MechanicalComponentsBenchmark':
+                points = data.to(device)
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
 
@@ -210,12 +212,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
 
         if epoch % args.val_freq == 0:# and epoch != 0:
             # Validate the current model
-            if config.get('evaluate_retrieval_acc'):
-                metrics = validate_ESB(base_model, test_dataloader, epoch, val_writer, args, config, logger=logger, rot=False)
-                rot_metrics = validate_ESB(base_model, test_rot_dataloader, epoch, val_writer, args, config, logger=logger, rot=True)
-            else:
-                metrics = validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_writer, args, config, logger=logger, rot=False)
-                rot_metrics = validate(base_model, extra_train_dataloader, test_rot_dataloader, epoch, val_writer, args, config, logger=logger, rot=True)
+            metrics = validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_writer, args, config, logger=logger, rot=False)
+            rot_metrics = validate(base_model, extra_train_dataloader, test_rot_dataloader, epoch, val_writer, args, config, logger=logger, rot=True)
 
             # Save ckeckpoints
             if metrics.better_than(best_metrics):
@@ -283,21 +281,24 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
             test_features = dist_utils.gather_tensor(test_features, args)
             test_label = dist_utils.gather_tensor(test_label, args)
 
-        svm_acc = evaluate_svm(train_features, train_label, test_features, test_label)
+        if config.get('evaluate_retrieval_acc'):
+            acc = evaluate_nn_precision(test_features, test_label)
+        else:
+            acc = evaluate_svm(train_features, train_label, test_features, test_label)
 
         if rot:
-            print_log('[Validation_ROT] EPOCH: %d  acc = %.4f' % (epoch,svm_acc), logger=logger)
+            print_log('[Validation_ROT] EPOCH: %d  acc = %.4f' % (epoch,acc), logger=logger)
         else: 
-            print_log('[Validation] EPOCH: %d  acc = %.4f' % (epoch,svm_acc), logger=logger)
+            print_log('[Validation] EPOCH: %d  acc = %.4f' % (epoch,acc), logger=logger)
 
         if args.distributed:
             torch.cuda.synchronize()
 
     # Add testing results to TensorBoard
     if val_writer is not None:
-        val_writer.add_scalar('Metric/ACC', svm_acc, epoch)
+        val_writer.add_scalar('Metric/ACC', acc, epoch)
 
-    return Acc_Metric(svm_acc)
+    return Acc_Metric(acc)
 
 def validate_ESB(base_model, test_dataloader, epoch, val_writer, args, config, logger = None, rot=False):
     if rot:
