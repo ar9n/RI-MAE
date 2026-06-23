@@ -14,11 +14,11 @@ scheduler: {
 
 dataset : {
   train : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'train', npoints: 1024}},
+            others: {subset: 'train', npoints: 1024, whole: True}},
   val : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'test', npoints: 1024}},
+            others: {subset: 'test', npoints: 1024, whole: True}},
   test : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'test', npoints: 1024}}}
+            others: {subset: 'test', npoints: 1024, whole: True}}}
 
 model : {
   NAME: RITransformer_MAE,
@@ -40,3 +40,4 @@ grad_norm_clip : 10
 #1512
 
 consider_metric: CDL1
+evaluate_retrieval_acc: True
