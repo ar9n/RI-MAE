@@ -4,9 +4,8 @@ from pkgutil import extend_path
 import torch
 import torch.nn as nn
 import os
-import json
 from tools import builder
-from utils import misc, dist_utils
+from utils import misc, dist_utils, feature_dict
 import time
 from utils.logger import *
 from utils.AverageMeter import AverageMeter
@@ -51,7 +50,7 @@ def evaluate_svm(train_features, train_labels, test_features, test_labels):
     return np.sum(test_labels == pred) * 1. / pred.shape[0]
 
 def evaluate_nn_precision(features, labels):
-    nbrs = NearestNeighbors(n_neighbors=2, algorithm="ball_tree").fit(features)
+    nbrs = NearestNeighbors(n_neighbors=2, metric="cosine", algorithm="auto").fit(features)
     _, indices = nbrs.kneighbors(features)
 
     correct = 0
@@ -63,6 +62,44 @@ def evaluate_nn_precision(features, labels):
 
     return correct / total if total > 0 else 0.0
 
+def evaluate_map(features, labels):
+    """
+    Compute retrieval mAP using cosine nearest-neighbor ranking.
+    Self-match is excluded for each query.
+    """
+    features = np.asarray(features, dtype=np.float32)
+    labels = np.asarray(labels)
+
+    if features.ndim != 2 or labels.ndim != 1 or features.shape[0] != labels.shape[0]:
+        raise ValueError("features must be (N, D) and labels must be (N,) with matching N")
+
+    n = features.shape[0]
+    if n <= 1:
+        return 0.0
+
+    # Full ranking per query via nearest neighbors (cosine distance)
+    nbrs = NearestNeighbors(n_neighbors=n, metric="cosine", algorithm="auto").fit(features)
+    _, indices = nbrs.kneighbors(features)
+
+    ap_list = []
+    for i in range(n):
+        ranked = indices[i]
+        ranked = ranked[ranked != i]  # remove self
+
+        # number of relevant gallery samples for this query
+        num_rel = int(np.sum(labels == labels[i]) - 1)
+        if num_rel <= 0:
+            continue
+
+        rel = (labels[ranked] == labels[i]).astype(np.float32)
+        cumsum_rel = np.cumsum(rel)
+        ranks = np.arange(1, rel.shape[0] + 1, dtype=np.float32)
+        precision_at_k = cumsum_rel / ranks
+
+        ap = float(np.sum(precision_at_k * rel) / num_rel)
+        ap_list.append(ap)
+
+    return float(np.mean(ap_list)) if len(ap_list) > 0 else 0.0
 
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
@@ -237,9 +274,13 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
         print_log(f"[VALIDATION] Start validating epoch {epoch}", logger = logger)
     base_model.eval()  # set model to eval mode
 
+    test_categories = []
+    test_object_names = []
     test_features = []
     test_label = []
 
+    train_categories = []
+    train_object_names = []
     train_features = []
     train_label = []
     npoints = 1024
@@ -257,6 +298,8 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
 
             train_features.append(feature.detach().cpu().numpy())
             train_label.append(target.detach().cpu().numpy())
+            train_categories.extend(list(taxonomy_ids))
+            train_object_names.extend(list(model_ids))
 
         for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
             points = data[0].to(device)
@@ -269,6 +312,8 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
 
             test_features.append(feature.detach().cpu().numpy())
             test_label.append(target.detach().cpu().numpy())
+            test_categories.extend(list(taxonomy_ids))
+            test_object_names.extend(list(model_ids))
 
         train_features = np.concatenate(train_features)
         train_label = np.concatenate(train_label)
@@ -283,6 +328,8 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
 
         if config.get('evaluate_retrieval_acc'):
             acc = evaluate_nn_precision(test_features, test_label)
+            feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
+            print_log(f"Saved feature dictionary to {json_path}", logger=logger)
         else:
             acc = evaluate_svm(train_features, train_label, test_features, test_label)
 
@@ -299,73 +346,6 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
         val_writer.add_scalar('Metric/ACC', acc, epoch)
 
     return Acc_Metric(acc)
-
-def validate_ESB(base_model, test_dataloader, epoch, val_writer, args, config, logger = None, rot=False):
-    if rot:
-        print_log(f"[VALIDATION_ROT] Start validating epoch {epoch}", logger=logger)
-    else:
-        print_log(f"[VALIDATION] Start validating epoch {epoch}", logger=logger)
-
-    base_model.eval()
-    test_features = []
-    test_labels = []
-    test_object_names = []
-    npoints = 1024
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    with torch.no_grad():
-        for _, (category, object_name, data) in enumerate(test_dataloader):
-            points = data.to(device)
-            points = misc.fps(points, npoints)
-            assert points.size(1) == npoints
-
-            feature = base_model(points, noaug=True)
-            test_features.append(feature.detach().cpu().numpy())
-
-            # keep all labels and names in batch
-            if isinstance(category, (list, tuple)):
-                test_labels.extend(list(category))
-            else:
-                test_labels.append(category)
-            
-            if isinstance(object_name, (list, tuple)):
-                test_object_names.extend(list(object_name))
-            else:
-                test_object_names.append(object_name)
-
-        test_features = np.concatenate(test_features, axis=0)
-
-        if not rot:
-            # Create feature dictionary
-            feature_dict = {}
-            for i, name in enumerate(test_object_names):
-                feature_dict[name] = {
-                    'category': test_labels[i],
-                    'feature': test_features[i].tolist()  # convert to list for JSON serialization
-                }
-
-            # Save to JSON
-            json_path = os.path.join(args.experiment_path, f"features/ESB_features_{epoch}.json")
-            os.makedirs(os.path.dirname(json_path), exist_ok=True)  # Create directory if it doesn't exist
-            with open(json_path, 'w') as f:
-                json.dump(feature_dict, f, indent=2)
-            print_log(f"Saved feature dictionary to {json_path}", logger=logger)
-
-        # string-label gather is not supported here; skip distributed gather for labels
-        retrieval_acc = NN_precision(test_features, test_labels)
-
-        if rot:
-            print_log('[Validation_ROT] EPOCH: %d  acc = %.4f' % (epoch, retrieval_acc), logger=logger)
-        else:
-            print_log('[Validation] EPOCH: %d  acc = %.4f' % (epoch, retrieval_acc), logger=logger)
-
-        if args.distributed:
-            torch.cuda.synchronize()
-
-    if val_writer is not None:
-        val_writer.add_scalar('Metric/ACC', retrieval_acc, epoch)
-
-    return Acc_Metric(retrieval_acc)
 
 def test_net(args, config):
     logger = get_logger(args.log_name)
@@ -443,4 +423,3 @@ def test_tsne(base_model, args, config, logger = None):
             test_label = dist_utils.gather_tensor(test_label, args)
         
         return train_features, train_label, test_features, test_label
-
