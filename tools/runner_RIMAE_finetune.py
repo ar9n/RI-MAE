@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from tools import builder
-from utils import misc, dist_utils
+from utils import misc, dist_utils, feature_dict
 import time
 from utils.logger import *
 from utils.AverageMeter import AverageMeter
@@ -10,6 +10,7 @@ import numpy as np
 from datasets import data_transforms
 from pointnet2_ops import pointnet2_utils
 from torchvision import transforms
+from sklearn.neighbors import NearestNeighbors
 
 
 train_transforms = transforms.Compose(
@@ -44,6 +45,19 @@ class Acc_Metric:
         _dict = dict()
         _dict['acc'] = self.acc
         return _dict
+
+def evaluate_nn_precision(features, labels):
+    nbrs = NearestNeighbors(n_neighbors=2, metric="cosine", algorithm="auto").fit(features)
+    _, indices = nbrs.kneighbors(features)
+
+    correct = 0
+    total = len(labels)
+
+    for i in range(total):
+        if labels[i] == labels[indices[i, 1]]:
+            correct += 1
+
+    return correct / total if total > 0 else 0.0
 
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
@@ -199,7 +213,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
             if better:
                 best_metrics = metrics
                 builder.save_checkpoint(base_model, optimizer, epoch, metrics, best_metrics, 'ckpt-best', args, logger = logger)
-            if metrics.acc > 91.5 or (better and metrics.acc > 90):
+            if (metrics.acc > 91.5 or (better and metrics.acc > 90)) and config.get('evaluate_retrieval_acc') is None:
                 metrics_vote = validate_vote(base_model, test_dataloader, epoch, val_writer, args, config, logger=logger)
                 if metrics_vote.better_than(best_metrics_vote):
                     best_metrics_vote = metrics_vote
@@ -221,6 +235,9 @@ def validate(base_model, test_dataloader, epoch, val_writer, args, config, logge
 
     test_pred  = []
     test_label = []
+    test_features = []
+    test_object_names = []
+    test_categories = []
     npoints = config.npoints
     with torch.no_grad():
         for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
@@ -230,21 +247,32 @@ def validate(base_model, test_dataloader, epoch, val_writer, args, config, logge
             points = misc.fps(points, npoints)
 
             logits = base_model(points)
+            features = base_model.get_feature(points)
             target = label.view(-1)
 
             pred = logits.argmax(-1).view(-1)
 
             test_pred.append(pred.detach())
             test_label.append(target.detach())
+            test_features.append(features.detach())
+            test_object_names.extend(list(model_ids))
+            test_categories.extend(list(taxonomy_ids))
 
         test_pred = torch.cat(test_pred, dim=0)
         test_label = torch.cat(test_label, dim=0)
+        test_features = torch.cat(test_features, dim=0)
 
         if args.distributed:
             test_pred = dist_utils.gather_tensor(test_pred, args)
             test_label = dist_utils.gather_tensor(test_label, args)
+            test_features = dist_utils.gather_tensor(test_features, args)
 
-        acc = (test_pred == test_label).sum() / float(test_label.size(0)) * 100.
+        if config.get('evaluate_retrieval_acc'):
+            acc = evaluate_nn_precision(test_features.cpu().numpy(), test_label.cpu().numpy()) * 100.
+            json_path = feature_dict.save_features(test_categories, test_object_names, test_features.cpu().numpy(), 0, acc, args)
+            print_log(f"Saved feature dictionary to {json_path}", logger=logger)
+        else:
+            acc = (test_pred == test_label).sum() / float(test_label.size(0)) * 100.
         print_log('[Validation] EPOCH: %d  acc = %.4f' % (epoch, acc), logger=logger)
 
         if args.distributed:
@@ -348,6 +376,9 @@ def test(base_model, test_dataloader, args, config, logger = None):
 
     test_pred  = []
     test_label = []
+    test_features = []
+    test_object_names = []
+    test_categories = []
     npoints = config.npoints
 
     with torch.no_grad():
@@ -358,34 +389,46 @@ def test(base_model, test_dataloader, args, config, logger = None):
             points = misc.fps(points, npoints)
 
             logits = base_model(points)
+            features = base_model.get_feature(points)
             target = label.view(-1)
 
             pred = logits.argmax(-1).view(-1)
 
             test_pred.append(pred.detach())
             test_label.append(target.detach())
+            test_features.append(features.detach())
+            test_object_names.extend(list(model_ids))
+            test_categories.extend(list(taxonomy_ids))
 
         test_pred = torch.cat(test_pred, dim=0)
         test_label = torch.cat(test_label, dim=0)
+        test_features = torch.cat(test_features, dim=0)
 
         if args.distributed:
             test_pred = dist_utils.gather_tensor(test_pred, args)
             test_label = dist_utils.gather_tensor(test_label, args)
+            test_features = dist_utils.gather_tensor(test_features, args)
 
-        acc = (test_pred == test_label).sum() / float(test_label.size(0)) * 100.
+        if config.get('evaluate_retrieval_acc'):
+            acc = evaluate_nn_precision(test_features.cpu().numpy(), test_label.cpu().numpy()) * 100.
+            json_path = feature_dict.save_features(test_categories, test_object_names, test_features.cpu().numpy(), 0, acc, args)
+            print_log(f"Saved feature dictionary to {json_path}", logger=logger)
+        else:
+            acc = (test_pred == test_label).sum() / float(test_label.size(0)) * 100.
         print_log('[TEST] acc = %.4f' % acc, logger=logger)
 
         if args.distributed:
             torch.cuda.synchronize()
 
-        print_log(f"[TEST_VOTE]", logger = logger)
-        acc = 0.
-        for time in range(1, 10):
-            this_acc = test_vote(base_model, test_dataloader, 1, None, args, config, logger=logger, times=time)
-            if acc < this_acc:
-                acc = this_acc
+        if not config.get('evaluate_retrieval_acc'):
+            print_log(f"[TEST_VOTE]", logger = logger)
+            acc = 0.
+            for time in range(1, 10):
+                this_acc = test_vote(base_model, test_dataloader, 1, None, args, config, logger=logger, times=time)
+                if acc < this_acc:
+                    acc = this_acc
 
-        print_log('[TEST_VOTE] acc = %.4f' % acc, logger=logger)
+            print_log('[TEST_VOTE] acc = %.4f' % acc, logger=logger)
 
 def test_vote(base_model, test_dataloader, epoch, val_writer, args, config, logger = None, times = 10):
 
