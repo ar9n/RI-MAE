@@ -2,7 +2,7 @@ import os
 import torch
 import numpy as np
 import torch.utils.data as data
-from pathlib import Path
+from .io import IO
 from .build import DATASETS
 from utils.logger import *
 
@@ -63,11 +63,11 @@ class ABC(data.Dataset):
         
         self.file_list = []
 
-        for root, dirs, files in os.walk(data_folder):
+        for root, dirs, files in os.walk(self.data_root):
             for f in files:
-                if f.endswith('.obj'):
+                if f.endswith('.npy'):
                     chunk = root.split('/')[-2]
-                    file_list.append({
+                    self.file_list.append({
                         'chunk': chunk,
                         'file_name': f,
                         'file_path': os.path.join(root, f)
@@ -89,17 +89,12 @@ class ABC(data.Dataset):
         pc = pc / m
         return pc
 
-    def random_sample(self, pc, num):
-        np.random.shuffle(self.permutation)
-        pc = pc[self.permutation[:num]]
-        return pc
-
     def __getitem__(self, idx):
         sample = self.file_list[idx]
 
-        data = IO.get(os.path.join(self.data_root, sample['file_path'])).astype(np.float32)
-
-        data = self.random_sample(data, self.sample_points_num)
+        data = IO.get(sample['file_path']).astype(np.float32)
+        sampled_ids = np.random.choice(data.shape[0], 1024, replace=True)
+        data = data[sampled_ids]
         data = self.pc_norm(data)
         if self.rot:
             data = data @ rnd_rot()
