@@ -13,14 +13,14 @@ scheduler: {
 }}
 
 dataset : {
-  train : { _base_: cfgs/dataset_configs/ShapeNet-55.yaml, 
+  train : { _base_: cfgs/dataset_configs/ABC.yaml, 
             others: {subset: 'train', npoints: 1024, whole: True}},
-  val : { _base_: cfgs/dataset_configs/ScanObjectNN_objectbg.yaml, 
-            others: {subset: 'test', bs: 64}},
-  val_rot : { _base_: cfgs/dataset_configs/ScanObjectNN_objectbg.yaml, 
-            others: {subset: 'test_rot', bs: 64}},
-  extra_train : { _base_: cfgs/dataset_configs/ScanObjectNN_objectbg.yaml, 
-            others: {subset: 'train', bs: 4}}}
+  val : { _base_: cfgs/dataset_configs/MechanicalComponentsBenchmark.yaml, 
+            others: {subset: 'test', npoints: 1024, bs: 1, whole: True}},
+  val_rot : { _base_: cfgs/dataset_configs/MechanicalComponentsBenchmark.yaml, 
+            others: {subset: 'test', npoints: 1024, bs: 1, whole: True, rot: True}},
+  extra_train : { _base_: cfgs/dataset_configs/MechanicalComponentsBenchmark.yaml, 
+            others: {subset: 'train', npoints: 1024, whole: True}}}
 model : {
   NAME: RI_MAE, 
   mask_rand: True,
