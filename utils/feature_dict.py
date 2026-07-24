@@ -13,7 +13,7 @@ def save_features(categories, object_names, features, epoch, acc, args):
         }
 
     # Save to JSON
-    json_path = os.path.join(args.experiment_path, f"features/ESB_features_{epoch}.json")
+    json_path = os.path.join(args.experiment_path, f"features/features_{epoch}.json")
     os.makedirs(os.path.dirname(json_path), exist_ok=True)  # Create directory if it doesn't exist
     with open(json_path, 'w') as f:
         json.dump(feature_dict, f, indent=2)
