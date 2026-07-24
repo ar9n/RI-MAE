@@ -1,4 +1,5 @@
 import os
+import json
 import torch
 import numpy as np
 import torch.utils.data as data
@@ -54,7 +55,14 @@ class MechanicalComponentsBenchmark(data.Dataset):
         
         train_data_folder = os.path.join(self.data_root, 'train')
         test_data_folder = os.path.join(self.data_root, 'test')
-        
+
+        label_map_path = os.path.join(self.data_root, 'label_map.json')
+        if not os.path.exists(label_map_path):
+            self.label_map = self._build_label_map(train_data_folder, test_data_folder, label_map_path)
+        else:
+            with open(label_map_path, 'r', encoding='utf-8') as f:
+                self.label_map = json.load(f)
+
         self.sample_points_num = config.npoints
         self.whole = config.get('whole')
 
@@ -72,11 +80,35 @@ class MechanicalComponentsBenchmark(data.Dataset):
 
         print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'MechanicalComponentsBenchmark')
 
+    def _build_label_map(self, train_folder, test_folder, save_path):
+        categories = set()
+        for data_folder in [train_folder, test_folder]:
+            for root, dirs, files in os.walk(data_folder):
+                for f in files:
+                    if f.endswith('.obj'):
+                        rel = os.path.relpath(root, data_folder)
+                        parts = rel.split(os.sep)
+                        if len(parts) >= 2:
+                            category = f"{parts[0]}/{parts[1]}"
+                        else:
+                            category = parts[0]
+                        categories.add(category)  # <-- use variable, not hardcoded parts[1]
+        label_map = {cat: idx for idx, cat in enumerate(sorted(categories))}
+        with open(save_path, 'w', encoding='utf-8') as f:
+            json.dump(label_map, f, indent=2)
+        print_log(f'[DATASET] label_map.json created with {len(label_map)} categories', logger='MechanicalComponentsBenchmark')
+        return label_map
+
     def fill_file_list(self, file_list, data_folder):
         for root, dirs, files in os.walk(data_folder):
             for f in files:
                 if f.endswith('.obj'):
-                    category = root.split('/')[-1]
+                    rel = os.path.relpath(root, data_folder)
+                    parts = rel.split(os.sep)
+                    if len(parts) >= 2:
+                        category = f"{parts[0]}/{parts[1]}"
+                    else:
+                        category = parts[0]
                     file_list.append({
                         'category': category,
                         'object_name': f,
@@ -125,7 +157,7 @@ class MechanicalComponentsBenchmark(data.Dataset):
         if self.rot:
             data = data @ rnd_rot()
         data = torch.from_numpy(data).float()
-        return sample['category'], sample['object_name'], data
+        return sample['category'], sample['object_name'], (data, self.label_map[sample['category']])
 
     def __len__(self):
         return len(self.file_list)
