@@ -44,6 +44,11 @@ def get_args():
         default=False, 
         help = 'test mode for certain ckpt')
     parser.add_argument(
+        '--test_retrieval', 
+        action='store_true', 
+        default=False, 
+        help = 'test retrieval for certain ckpt')
+    parser.add_argument(
         '--finetune_model', 
         action='store_true', 
         default=False, 
