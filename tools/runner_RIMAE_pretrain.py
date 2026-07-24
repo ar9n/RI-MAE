@@ -64,42 +64,48 @@ def evaluate_nn_precision(features, labels):
 
 def evaluate_map(features, labels):
     """
-    Compute retrieval mAP using cosine nearest-neighbor ranking.
-    Self-match is excluded for each query.
+    Compute retrieval mAP using cosine similarity with chunked matrix multiplication.
     """
     features = np.asarray(features, dtype=np.float32)
     labels = np.asarray(labels)
-
-    if features.ndim != 2 or labels.ndim != 1 or features.shape[0] != labels.shape[0]:
-        raise ValueError("features must be (N, D) and labels must be (N,) with matching N")
 
     n = features.shape[0]
     if n <= 1:
         return 0.0
 
-    # Full ranking per query via nearest neighbors (cosine distance)
-    nbrs = NearestNeighbors(n_neighbors=n, metric="cosine", algorithm="auto").fit(features)
-    _, indices = nbrs.kneighbors(features)
+    # L2-normalize for cosine similarity via dot product
+    norms = np.linalg.norm(features, axis=1, keepdims=True)
+    features = features / (norms + 1e-8)
 
     ap_list = []
-    for i in range(n):
-        ranked = indices[i]
-        ranked = ranked[ranked != i]  # remove self
 
-        # number of relevant gallery samples for this query
-        num_rel = int(np.sum(labels == labels[i]) - 1)
+    for idx in range(n):
+    
+        query = features[idx]
+
+        # Cosine similarity
+        sim = query @ features.T
+
+        # exclude self
+        sim[idx] = -np.inf 
+
+        ranked = np.argsort(-sim)  # descending
+
+        num_rel = int(np.sum(labels == labels[idx]) - 1)
         if num_rel <= 0:
             continue
 
-        rel = (labels[ranked] == labels[i]).astype(np.float32)
+        rel = (labels[ranked] == labels[idx]).astype(np.float32)
         cumsum_rel = np.cumsum(rel)
-        ranks = np.arange(1, rel.shape[0] + 1, dtype=np.float32)
+        ranks = np.arange(1, n + 1, dtype=np.float32) 
         precision_at_k = cumsum_rel / ranks
-
         ap = float(np.sum(precision_at_k * rel) / num_rel)
         ap_list.append(ap)
+        if idx % 100 == 0:
+            print(ranked[:10])
+            print(f"Processed {idx}/{n} queries, current mAP: {float(np.mean(ap_list)):.4f}")
 
-    return float(np.mean(ap_list)) if len(ap_list) > 0 else 0.0
+    return float(np.mean(ap_list)) if ap_list else 0.0
 
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
@@ -181,6 +187,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
             elif dataset_name == 'EngineeringShapeBenchmark':
                 points = data.to(device)
             elif dataset_name == 'MechanicalComponentsBenchmark':
+                points = data.to(device)
+            elif dataset_name == 'ABC':
                 points = data.to(device)
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
@@ -326,10 +334,13 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
             test_features = dist_utils.gather_tensor(test_features, args)
             test_label = dist_utils.gather_tensor(test_label, args)
 
-        if config.get('evaluate_retrieval_acc'):
+        dataset_name = config.dataset.val._base_.NAME
+        if dataset_name == 'EngineeringShapeBenchmark':
             acc = evaluate_nn_precision(test_features, test_label)
-            feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
+            json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
             print_log(f"Saved feature dictionary to {json_path}", logger=logger)
+        elif dataset_name == 'MechanicalComponentsBenchmark':
+            acc = evaluate_map(test_features, test_label)
         else:
             acc = evaluate_svm(train_features, train_label, test_features, test_label)
 
@@ -352,7 +363,11 @@ def test_net(args, config):
     print_log('Tester start ... ', logger = logger)
     base_model = builder.model_builder(config.model)
     # load checkpoints
-    builder.load_model(base_model, args.ckpts, logger = logger) # for finetuned transformer
+    if args.resume:
+        start_epoch, best_metric = builder.resume_model(base_model, args, logger = logger)
+    elif args.start_ckpts is not None:
+        builder.load_model(base_model, args.start_ckpts, logger = logger)
+    #builder.load_model(base_model, args.ckpts, logger = logger) # for finetuned transformer
     # base_model.load_model_from_ckpt(args.ckpts) # for BERT
     if args.use_gpu:
         base_model.to(args.local_rank)
