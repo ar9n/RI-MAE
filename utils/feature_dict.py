@@ -20,3 +20,18 @@ def save_features(categories, object_names, features, epoch, acc, args):
 
     return json_path
     
+def load_features(categories, object_names, features, epoch, args):
+    features_dir = os.path.join(args.experiment_path, "features")
+    json_path = os.path.join(features_dir, f"features_{epoch}.json")
+
+    if not os.path.exists(json_path):
+        return False
+
+    with open(json_path, "r") as f:
+        feature_dict = json.load(f)
+
+    object_names = list(feature_dict.keys())
+    categories = [feature_dict[name]["category"] for name in object_names]
+    features = [feature_dict[name]["feature"] for name in object_names]
+
+    return True
