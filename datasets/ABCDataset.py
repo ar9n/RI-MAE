@@ -59,6 +59,8 @@ class ABC(data.Dataset):
 
         self.rot = config.get('rot', False)
 
+        self.num_chunks = config.get('chunks', 100)
+
         print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'ABC')
         
         self.file_list = []
@@ -66,12 +68,14 @@ class ABC(data.Dataset):
         for root, dirs, files in os.walk(self.data_root):
             for f in files:
                 if f.endswith('.npy'):
-                    chunk = root.split('/')[-2]
-                    self.file_list.append({
-                        'chunk': chunk,
-                        'file_name': f,
-                        'file_path': os.path.join(root, f)
-                    })
+                    chunk = root.split('/')[-1]
+                    chunk_idx = int(chunk[6:])
+                    if chunk_idx < self.num_chunks:
+                        self.file_list.append({
+                            'chunk': chunk_idx,
+                            'file_name': f,
+                            'file_path': os.path.join(root, f)
+                        })
 
         if not self.whole:
             if self.subset == 'train':
