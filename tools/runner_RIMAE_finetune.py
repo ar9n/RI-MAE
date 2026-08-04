@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from tools import builder
-from utils import misc, dist_utils, feature_dict
+from utils import misc, dist_utils, feature_dict, metrics_retrieval
 import time
 from utils.logger import *
 from utils.AverageMeter import AverageMeter
@@ -46,18 +46,6 @@ class Acc_Metric:
         _dict['acc'] = self.acc
         return _dict
 
-def evaluate_nn_precision(features, labels):
-    nbrs = NearestNeighbors(n_neighbors=2, metric="cosine", algorithm="auto").fit(features)
-    _, indices = nbrs.kneighbors(features)
-
-    correct = 0
-    total = len(labels)
-
-    for i in range(total):
-        if labels[i] == labels[indices[i, 1]]:
-            correct += 1
-
-    return correct / total if total > 0 else 0.0
 
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)

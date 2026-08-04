@@ -5,14 +5,13 @@ import torch
 import torch.nn as nn
 import os
 from tools import builder
-from utils import misc, dist_utils, feature_dict
+from utils import misc, dist_utils, feature_dict, metrics_retrieval
 import time
 from utils.logger import *
 from utils.AverageMeter import AverageMeter
 import math
 from sklearn.svm import LinearSVC
 from sklearn.svm import SVC
-from sklearn.neighbors import NearestNeighbors
 import numpy as np
 from torchvision import transforms
 from datasets import data_transforms
@@ -49,63 +48,6 @@ def evaluate_svm(train_features, train_labels, test_features, test_labels):
     pred = clf.predict(test_features)
     return np.sum(test_labels == pred) * 1. / pred.shape[0]
 
-def evaluate_nn_precision(features, labels):
-    nbrs = NearestNeighbors(n_neighbors=2, metric="cosine", algorithm="auto").fit(features)
-    _, indices = nbrs.kneighbors(features)
-
-    correct = 0
-    total = len(labels)
-
-    for i in range(total):
-        if labels[i] == labels[indices[i, 1]]:
-            correct += 1
-
-    return correct / total if total > 0 else 0.0
-
-def evaluate_map(features, labels):
-    """
-    Compute retrieval mAP using cosine similarity with chunked matrix multiplication.
-    """
-    features = np.asarray(features, dtype=np.float32)
-    labels = np.asarray(labels)
-
-    n = features.shape[0]
-    if n <= 1:
-        return 0.0
-
-    # L2-normalize for cosine similarity via dot product
-    norms = np.linalg.norm(features, axis=1, keepdims=True)
-    features = features / (norms + 1e-8)
-
-    ap_list = []
-
-    for idx in range(n):
-    
-        query = features[idx]
-
-        # Cosine similarity
-        sim = query @ features.T
-
-        # exclude self
-        sim[idx] = -np.inf 
-
-        ranked = np.argsort(-sim)  # descending
-
-        num_rel = int(np.sum(labels == labels[idx]) - 1)
-        if num_rel <= 0:
-            continue
-
-        rel = (labels[ranked] == labels[idx]).astype(np.float32)
-        cumsum_rel = np.cumsum(rel)
-        ranks = np.arange(1, n + 1, dtype=np.float32) 
-        precision_at_k = cumsum_rel / ranks
-        ap = float(np.sum(precision_at_k * rel) / num_rel)
-        ap_list.append(ap)
-        if idx % 100 == 0:
-            print(ranked[:10])
-            print(f"Processed {idx}/{n} queries, current mAP: {float(np.mean(ap_list)):.4f}")
-
-    return float(np.mean(ap_list)) if ap_list else 0.0
 
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
@@ -282,65 +224,80 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
         print_log(f"[VALIDATION] Start validating epoch {epoch}", logger = logger)
     base_model.eval()  # set model to eval mode
 
-    test_categories = []
-    test_object_names = []
-    test_features = []
-    test_label = []
+    #test_categories, test_object_names, test_features = feature_dict.load_features(epoch, args)
+    test_object_names = None
+    loaded = True
 
-    train_categories = []
-    train_object_names = []
+    if test_object_names is None:
+        loaded = False
+        test_categories = []
+        test_object_names = []
+        test_features = []
+        test_label = []
+
     train_features = []
     train_label = []
+
     npoints = 1024
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     with torch.no_grad():
-        for idx, (taxonomy_ids, model_ids, data) in enumerate(extra_train_dataloader):
-            points = data[0].to(device)
-            label = data[1].to(device)
+        if extra_train_dataloader is not None:
+            for idx, (taxonomy_ids, model_ids, data) in enumerate(extra_train_dataloader):
+                points = data[0].to(device)
+                label = data[1].to(device)
 
-            points = misc.fps(points, npoints)
+                points = misc.fps(points, npoints)
 
-            assert points.size(1) == npoints
-            feature = base_model(points, noaug=True)
-            target = label.view(-1)
+                assert points.size(1) == npoints
+                feature = base_model(points, noaug=True)
+                target = label.view(-1)
 
-            train_features.append(feature.detach().cpu().numpy())
-            train_label.append(target.detach().cpu().numpy())
-            train_categories.extend(list(taxonomy_ids))
-            train_object_names.extend(list(model_ids))
+                train_features.append(feature.detach().cpu().numpy())
+                train_label.append(target.detach().cpu().numpy())
 
-        for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
-            points = data[0].to(device)
-            label = data[1].to(device)
+            train_features = np.concatenate(train_features)
+            train_label = np.concatenate(train_label)
+            if args.distributed:
+                train_features = dist_utils.gather_tensor(train_features, args)
+                train_label = dist_utils.gather_tensor(train_label, args)
 
-            points = misc.fps(points, npoints)
-            assert points.size(1) == npoints
-            feature = base_model(points, noaug=True)
-            target = label.view(-1)
+        if not loaded:
+            for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
+                points = data[0].to(device)
+                label = data[1].to(device)
 
-            test_features.append(feature.detach().cpu().numpy())
-            test_label.append(target.detach().cpu().numpy())
-            test_categories.extend(list(taxonomy_ids))
-            test_object_names.extend(list(model_ids))
+                points = misc.fps(points, npoints)
+                assert points.size(1) == npoints
+                feature = base_model(points, noaug=True)
+                target = label.view(-1)
 
-        train_features = np.concatenate(train_features)
-        train_label = np.concatenate(train_label)
-        test_features = np.concatenate(test_features)
-        test_label = np.concatenate(test_label)
+                test_features.append(feature.detach().cpu().numpy())
+                test_label.append(target.detach().cpu().numpy())
+                test_categories.extend(list(taxonomy_ids))
+                test_object_names.extend(list(model_ids))
 
-        if args.distributed:
-            train_features = dist_utils.gather_tensor(train_features, args)
-            train_label = dist_utils.gather_tensor(train_label, args)
-            test_features = dist_utils.gather_tensor(test_features, args)
-            test_label = dist_utils.gather_tensor(test_label, args)
+            test_features = np.concatenate(test_features)
+            test_label = np.concatenate(test_label)
+            if args.distributed:
+                test_features = dist_utils.gather_tensor(test_features, args)
+                test_label = dist_utils.gather_tensor(test_label, args)
 
         dataset_name = config.dataset.val._base_.NAME
         if dataset_name == 'EngineeringShapeBenchmark':
-            acc = evaluate_nn_precision(test_features, test_label)
-            json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
-            print_log(f"Saved feature dictionary to {json_path}", logger=logger)
+            metrics = metrics_retrieval.evaluate(test_features, test_categories)
+            acc = metrics["NN"]
+            print_log(f"Retrieval metrics: {metrics}", logger=logger)
+            if not loaded:
+                json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
+                print_log(f"Saved feature dictionary to {json_path}", logger=logger)
         elif dataset_name == 'MechanicalComponentsBenchmark':
-            acc = evaluate_map(test_features, test_label)
+            metrics = metrics_retrieval.evaluate(test_features, test_categories)
+            acc = metrics["mAP"]
+            print_log(f"Retrieval metrics: {metrics}", logger=logger)
+            if epoch == 0 and not loaded:
+                json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
+                print_log(f"Saved feature dictionary to {json_path}", logger=logger)
         else:
             acc = evaluate_svm(train_features, train_label, test_features, test_label)
 
@@ -361,16 +318,13 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
 def test_net(args, config):
     logger = get_logger(args.log_name)
     print_log('Tester start ... ', logger = logger)
+    # build model
     base_model = builder.model_builder(config.model)
-    # load checkpoints
-    if args.resume:
-        start_epoch, best_metric = builder.resume_model(base_model, args, logger = logger)
-    elif args.start_ckpts is not None:
-        builder.load_model(base_model, args.start_ckpts, logger = logger)
-    #builder.load_model(base_model, args.ckpts, logger = logger) # for finetuned transformer
-    # base_model.load_model_from_ckpt(args.ckpts) # for BERT
     if args.use_gpu:
         base_model.to(args.local_rank)
+
+    # load ckpts
+    builder.load_model(base_model, args.ckpts, logger = logger)
 
     #  DDP    
     if args.distributed:
