@@ -1,26 +1,26 @@
 optimizer : {
   type: AdamW,
   kwargs: {
-  lr : 0.0005, 
-  weight_decay : 0.05
+  lr : 0.0001, 
+  weight_decay : 0.01
 }}
 
 scheduler: {
   type: CosLR,
   kwargs: {
     epochs: 300,
-    initial_epochs : 10
+    initial_epochs : 5
 }}
 
 dataset : {
-  train : { _base_: cfgs/dataset_configs/ShapeNet-55.yaml, 
-            others: {subset: 'train', npoints: 1024, whole: True}},
-  val : { _base_: cfgs/dataset_configs/MechanicalComponentsBenchmark.yaml, 
+  train : { _base_: cfgs/dataset_configs/ReplayDataset.yaml, 
+            others: {subset: 'train', npoints: 1024, whole: True,
+            target_dataset: { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, others: {subset: 'train', npoints: 1024, whole: True}},
+            replay_dataset: { _base_: cfgs/dataset_configs/ShapeNet-55.yaml, others: {subset: 'train', npoints: 1024, whole: True}}}},
+  val : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
             others: {subset: 'test', npoints: 1024, bs: 1, whole: True}},
-  val_rot : { _base_: cfgs/dataset_configs/MechanicalComponentsBenchmark.yaml, 
-            others: {subset: 'test', npoints: 1024, bs: 1, whole: True, rot: True}},
-  extra_train : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'test', npoints: 1024, whole: False}}}
+  val_rot : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
+            others: {subset: 'test', npoints: 1024, bs: 1, whole: True, rot: True}}}
 model : {
   NAME: RI_MAE, 
   mask_rand: True,
@@ -28,7 +28,7 @@ model : {
   use_emd: False,
   
   transformer_config: {
-    mask_ratio: [0.70, 0.70], 
+    mask_ratio: [0.75, 0.75], 
     trans_dim: 384, 
     depth_encoder: 12, 
     depth_predictor: 1, 
@@ -52,4 +52,3 @@ clip_gradients: True
 clip_grad: 3.0
 
 consider_metric: CDL1
-evaluate_retrieval_acc: True
