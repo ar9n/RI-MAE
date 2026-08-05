@@ -103,7 +103,7 @@ class ABC(data.Dataset):
         if self.rot:
             data = data @ rnd_rot()
         data = torch.from_numpy(data).float()
-        return sample['chunk'], sample['file_name'], data
+        return sample['chunk'], sample['file_name'], (data, 0)
 
     def __len__(self):
         return len(self.file_list)

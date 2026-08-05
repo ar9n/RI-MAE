@@ -108,7 +108,7 @@ class ShapeNet(data.Dataset):
         if self.rot:
             data = data @ rnd_rot()
         data = torch.from_numpy(data).float()
-        return sample['taxonomy_id'], sample['model_id'], data
+        return sample['taxonomy_id'], sample['model_id'], (data, 0)
 
     def __len__(self):
         return len(self.file_list)
