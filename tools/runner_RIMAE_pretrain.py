@@ -122,7 +122,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
             npoints = config.dataset.train.others.npoints
             dataset_name = config.dataset.train._base_.NAME
             if dataset_name == 'ShapeNet':
-                points = data.to(device)
+                points = data[0].to(device)
             elif dataset_name == 'ModelNet':
                 points = data[0].to(device)
                 points = misc.fps(points, npoints)   
@@ -131,7 +131,9 @@ def run_net(args, config, train_writer=None, val_writer=None):
             elif dataset_name == 'MechanicalComponentsBenchmark':
                 points = data.to(device)
             elif dataset_name == 'ABC':
-                points = data.to(device)
+                points = data[0].to(device)
+            elif dataset_name == 'Replay':
+                points = data[0].to(device)
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
 
