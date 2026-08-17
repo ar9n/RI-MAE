@@ -226,16 +226,10 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
         print_log(f"[VALIDATION] Start validating epoch {epoch}", logger = logger)
     base_model.eval()  # set model to eval mode
 
-    #test_categories, test_object_names, test_features = feature_dict.load_features(epoch, args)
-    test_object_names = None
-    loaded = True
-
-    if test_object_names is None:
-        loaded = False
-        test_categories = []
-        test_object_names = []
-        test_features = []
-        test_label = []
+    test_categories = []
+    test_object_names = []
+    test_features = []
+    test_label = []
 
     train_features = []
     train_label = []
@@ -264,7 +258,6 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
                 train_features = dist_utils.gather_tensor(train_features, args)
                 train_label = dist_utils.gather_tensor(train_label, args)
 
-        if not loaded:
             for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
                 points = data[0].to(device)
                 label = data[1].to(device)
@@ -290,14 +283,14 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
             metrics = metrics_retrieval.evaluate(test_features, test_categories)
             acc = metrics["NN"]
             print_log(f"Retrieval metrics: {metrics}", logger=logger)
-            if not loaded:
+            if args.save_features:
                 json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
                 print_log(f"Saved feature dictionary to {json_path}", logger=logger)
         elif dataset_name == 'MechanicalComponentsBenchmark':
             metrics = metrics_retrieval.evaluate(test_features, test_categories)
             acc = metrics["mAP"]
             print_log(f"Retrieval metrics: {metrics}", logger=logger)
-            if epoch == 0 and not loaded:
+            if args.save_features:
                 json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
                 print_log(f"Saved feature dictionary to {json_path}", logger=logger)
         else:
