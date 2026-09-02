@@ -258,30 +258,30 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
                 train_features = dist_utils.gather_tensor(train_features, args)
                 train_label = dist_utils.gather_tensor(train_label, args)
 
-            for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
-                points = data[0].to(device)
-                label = data[1].to(device)
+        for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
+            points = data[0].to(device)
+            label = data[1].to(device)
 
-                points = misc.fps(points, npoints)
-                assert points.size(1) == npoints
-                feature = base_model(points, noaug=True)
-                target = label.view(-1)
+            points = misc.fps(points, npoints)
+            assert points.size(1) == npoints
+            feature = base_model(points, noaug=True)
+            target = label.view(-1)
 
-                test_features.append(feature.detach().cpu().numpy())
-                test_label.append(target.detach().cpu().numpy())
-                test_categories.extend(list(taxonomy_ids))
-                test_object_names.extend(list(model_ids))
+            test_features.append(feature.detach().cpu().numpy())
+            test_label.append(target.detach().cpu().numpy())
+            test_categories.extend(list(taxonomy_ids))
+            test_object_names.extend(list(model_ids))
 
-            test_features = np.concatenate(test_features)
-            test_label = np.concatenate(test_label)
-            if args.distributed:
-                test_features = dist_utils.gather_tensor(test_features, args)
-                test_label = dist_utils.gather_tensor(test_label, args)
+        test_features = np.concatenate(test_features)
+        test_label = np.concatenate(test_label)
+        if args.distributed:
+            test_features = dist_utils.gather_tensor(test_features, args)
+            test_label = dist_utils.gather_tensor(test_label, args)
 
         dataset_name = config.dataset.val._base_.NAME
         if dataset_name == 'EngineeringShapeBenchmark':
             metrics = metrics_retrieval.evaluate(test_features, test_categories)
-            acc = metrics["NN"]
+            acc = metrics["P@1"]
             print_log(f"Retrieval metrics: {metrics}", logger=logger)
             if args.save_features:
                 json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
