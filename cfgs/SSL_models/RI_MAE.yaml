@@ -15,6 +15,8 @@ scheduler: {
 dataset : {
   train : { _base_: cfgs/dataset_configs/ABC.yaml, 
             others: {subset: 'train', npoints: 1024, whole: True, chunks: 7}},
+  #train : { _base_: cfgs/dataset_configs/ShapeNet-55.yaml, 
+            #others: {subset: 'train', npoints: 1024, whole: True}},
   val : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
             others: {subset: 'test', npoints: 1024, bs: 1, whole: True}},
   val_rot : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
