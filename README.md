@@ -9,11 +9,18 @@ In this work, we propose a novel Rotation Invariant Masked AutoEncoders for self
 </div>
 
 ## 1. Requirements
-PyTorch >= 1.7.0;
-python >= 3.7;
-CUDA >= 9.0;
-GCC >= 4.9;
-torchvision;
+Note: These instructions apply if the repository is used within a WSL-Ubuntu distribution
+GCC >= 4.9
+```
+sudo apt install build-essential ninja-build
+```
+CUDA >= 9.0
+https://docs.nvidia.com/cuda/wsl-user-guide/index.html
+
+PyTorch >= 1.7.0 and Torchvision
+https://pytorch.org/get-started/previous-versions/ (Make sure that the CUDA versions match)
+
+python >= 3.7
 
 ```
 pip install -r requirements.txt
