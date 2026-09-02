@@ -4,9 +4,8 @@ from pkgutil import extend_path
 import torch
 import torch.nn as nn
 import os
-import json
 from tools import builder
-from utils import misc, dist_utils
+from utils import misc, dist_utils, feature_dict, metrics_retrieval
 import time
 from utils.logger import *
 from utils.AverageMeter import AverageMeter
@@ -48,6 +47,7 @@ def evaluate_svm(train_features, train_labels, test_features, test_labels):
     clf.fit(train_features, train_labels)
     pred = clf.predict(test_features)
     return np.sum(test_labels == pred) * 1. / pred.shape[0]
+
 
 def run_net(args, config, train_writer=None, val_writer=None):
     logger = get_logger(args.log_name)
@@ -122,10 +122,18 @@ def run_net(args, config, train_writer=None, val_writer=None):
             npoints = config.dataset.train.others.npoints
             dataset_name = config.dataset.train._base_.NAME
             if dataset_name == 'ShapeNet':
-                points = data.to(device)
+                points = data[0].to(device)
             elif dataset_name == 'ModelNet':
                 points = data[0].to(device)
                 points = misc.fps(points, npoints)   
+            elif dataset_name == 'EngineeringShapeBenchmark':
+                points = data.to(device)
+            elif dataset_name == 'MechanicalComponentsBenchmark':
+                points = data.to(device)
+            elif dataset_name == 'ABC':
+                points = data[0].to(device)
+            elif dataset_name == 'Replay':
+                points = data[0].to(device)
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
 
@@ -218,26 +226,37 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
         print_log(f"[VALIDATION] Start validating epoch {epoch}", logger = logger)
     base_model.eval()  # set model to eval mode
 
+    test_categories = []
+    test_object_names = []
     test_features = []
     test_label = []
 
     train_features = []
     train_label = []
+
     npoints = 1024
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     with torch.no_grad():
-        for idx, (taxonomy_ids, model_ids, data) in enumerate(extra_train_dataloader):
-            points = data[0].to(device)
-            label = data[1].to(device)
+        if extra_train_dataloader is not None:
+            for idx, (taxonomy_ids, model_ids, data) in enumerate(extra_train_dataloader):
+                points = data[0].to(device)
+                label = data[1].to(device)
 
-            points = misc.fps(points, npoints)
+                points = misc.fps(points, npoints)
 
-            assert points.size(1) == npoints
-            feature = base_model(points, noaug=True)
-            target = label.view(-1)
+                assert points.size(1) == npoints
+                feature = base_model(points, noaug=True)
+                target = label.view(-1)
 
-            train_features.append(feature.detach().cpu().numpy())
-            train_label.append(target.detach().cpu().numpy())
+                train_features.append(feature.detach().cpu().numpy())
+                train_label.append(target.detach().cpu().numpy())
+
+            train_features = np.concatenate(train_features)
+            train_label = np.concatenate(train_label)
+            if args.distributed:
+                train_features = dist_utils.gather_tensor(train_features, args)
+                train_label = dist_utils.gather_tensor(train_label, args)
 
         for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
             points = data[0].to(device)
@@ -250,43 +269,57 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
 
             test_features.append(feature.detach().cpu().numpy())
             test_label.append(target.detach().cpu().numpy())
+            test_categories.extend(list(taxonomy_ids))
+            test_object_names.extend(list(model_ids))
 
-        train_features = np.concatenate(train_features)
-        train_label = np.concatenate(train_label)
         test_features = np.concatenate(test_features)
         test_label = np.concatenate(test_label)
-
         if args.distributed:
-            train_features = dist_utils.gather_tensor(train_features, args)
-            train_label = dist_utils.gather_tensor(train_label, args)
             test_features = dist_utils.gather_tensor(test_features, args)
             test_label = dist_utils.gather_tensor(test_label, args)
 
-        svm_acc = evaluate_svm(train_features, train_label, test_features, test_label)
+        dataset_name = config.dataset.val._base_.NAME
+        if dataset_name == 'EngineeringShapeBenchmark':
+            metrics = metrics_retrieval.evaluate(test_features, test_categories)
+            acc = metrics["P@1"]
+            print_log(f"Retrieval metrics: {metrics}", logger=logger)
+            if args.save_features:
+                json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
+                print_log(f"Saved feature dictionary to {json_path}", logger=logger)
+        elif dataset_name == 'MechanicalComponentsBenchmark':
+            metrics = metrics_retrieval.evaluate(test_features, test_categories)
+            acc = metrics["mAP"]
+            print_log(f"Retrieval metrics: {metrics}", logger=logger)
+            if args.save_features:
+                json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
+                print_log(f"Saved feature dictionary to {json_path}", logger=logger)
+        else:
+            acc = evaluate_svm(train_features, train_label, test_features, test_label)
 
         if rot:
-            print_log('[Validation_ROT] EPOCH: %d  acc = %.4f' % (epoch,svm_acc), logger=logger)
+            print_log('[Validation_ROT] EPOCH: %d  acc = %.4f' % (epoch,acc), logger=logger)
         else: 
-            print_log('[Validation] EPOCH: %d  acc = %.4f' % (epoch,svm_acc), logger=logger)
+            print_log('[Validation] EPOCH: %d  acc = %.4f' % (epoch,acc), logger=logger)
 
         if args.distributed:
             torch.cuda.synchronize()
 
     # Add testing results to TensorBoard
     if val_writer is not None:
-        val_writer.add_scalar('Metric/ACC', svm_acc, epoch)
+        val_writer.add_scalar('Metric/ACC', acc, epoch)
 
-    return Acc_Metric(svm_acc)
+    return Acc_Metric(acc)
 
 def test_net(args, config):
     logger = get_logger(args.log_name)
     print_log('Tester start ... ', logger = logger)
+    # build model
     base_model = builder.model_builder(config.model)
-    # load checkpoints
-    builder.load_model(base_model, args.ckpts, logger = logger) # for finetuned transformer
-    # base_model.load_model_from_ckpt(args.ckpts) # for BERT
     if args.use_gpu:
         base_model.to(args.local_rank)
+
+    # load ckpts
+    builder.load_model(base_model, args.ckpts, logger = logger)
 
     #  DDP    
     if args.distributed:
@@ -354,5 +387,3 @@ def test_tsne(base_model, args, config, logger = None):
             test_label = dist_utils.gather_tensor(test_label, args)
         
         return train_features, train_label, test_features, test_label
-
-       

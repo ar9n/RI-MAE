@@ -3,3 +3,7 @@ import datasets.ShapeNet55Dataset
 import datasets.ModelNetDataset
 import datasets.ModelNetDatasetFewShot
 import datasets.ScanObjectNNDataset
+import datasets.ESBDataset
+import datasets.MCBDataset
+import datasets.ABCDataset
+import datasets.ReplayDataset

@@ -581,7 +581,7 @@ class RITransformer_MAE(nn.Module):
 
         return ori_embed
 
-    def forward(self, pts):
+    def get_feature(self, pts):
         # divide the point cloud in the same form
         neighborhood, center = self.group_divider(pts)
         neighborhood, ori_mat = content_orientation_disentanglement(neighborhood)
@@ -600,6 +600,9 @@ class RITransformer_MAE(nn.Module):
         max_features = torch.max(x, dim=1).values
         mean_features = torch.mean(x, dim=1)
         x = torch.cat([max_features, mean_features], dim=-1)
-        x = self.cls_head_finetune(x)
 
         return x
+
+    def forward(self, pts):
+        x = self.get_feature(pts)
+        return self.cls_head_finetune(x)

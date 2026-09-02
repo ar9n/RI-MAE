@@ -119,7 +119,7 @@ def resume_model(base_model, args, logger = None):
 
     # load state dict
     map_location = {'cuda:%d' % 0: 'cuda:%d' % args.local_rank}
-    state_dict = torch.load(ckpt_path, map_location=map_location)
+    state_dict = torch.load(ckpt_path, map_location=map_location, weights_only = False)
     # parameter resume of base model
     # if args.local_rank == 0:
     base_ckpt = {k.replace("module.", ""): v for k, v in state_dict['base_model'].items()}
@@ -142,7 +142,7 @@ def resume_optimizer(optimizer, args, logger = None):
         return 0, 0, 0
     print_log(f'[RESUME INFO] Loading optimizer from {ckpt_path}...', logger = logger )
     # load state dict
-    state_dict = torch.load(ckpt_path, map_location='cpu')
+    state_dict = torch.load(ckpt_path, map_location='cpu', weights_only = False)
     # optimizer
     optimizer.load_state_dict(state_dict['optimizer'])
 

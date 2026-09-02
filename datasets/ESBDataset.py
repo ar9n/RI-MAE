@@ -1,8 +1,10 @@
 import os
 import torch
+import trimesh
+import json
 import numpy as np
 import torch.utils.data as data
-from .io import IO
+from pathlib import Path
 from .build import DATASETS
 from utils.logger import *
 
@@ -47,43 +49,46 @@ def rnd_rot():
     return rot
 
 @DATASETS.register_module()
-class ShapeNet(data.Dataset):
+class EngineeringShapeBenchmark(data.Dataset):
     def __init__(self, config):
         self.data_root = config.DATA_PATH
-        self.pc_path = config.PC_PATH
         self.subset = config.subset
-        self.npoints = config.N_POINTS
         
-        self.data_list_file = os.path.join(self.data_root, f'{self.subset}.txt')
-        test_data_list_file = os.path.join(self.data_root, 'test.txt')
+        self.train_data_list_file = os.path.join(self.data_root, 'train.txt')
+        self.test_data_list_file = os.path.join(self.data_root, 'test.txt')
+        with open(os.path.join(self.data_root, 'label_map.json'), 'r', encoding='utf-8') as f:
+            self.label_map = json.load(f)
         
         self.sample_points_num = config.npoints
         self.whole = config.get('whole')
 
-        self.rot = True
+        self.rot = config.get('rot', False)
 
-        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'ShapeNet-55')
-        print_log(f'[DATASET] Open file {self.data_list_file}', logger = 'ShapeNet-55')
-        with open(self.data_list_file, 'r') as f:
-            lines = f.readlines()
-        if self.whole:
-            with open(test_data_list_file, 'r') as f:
-                test_lines = f.readlines()
-            print_log(f'[DATASET] Open file {test_data_list_file}', logger = 'ShapeNet-55')
-            lines = test_lines + lines
+        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'EngineeringShapeBenchmark')
+        
+        lines = []
+        if self.whole or self.subset == 'train':
+            print_log(f'[DATASET] Open file {self.train_data_list_file}', logger = 'EngineeringShapeBenchmark')
+            with open(self.train_data_list_file, 'r') as f:
+                lines = lines + f.readlines()
+        if self.whole or self.subset == 'test':
+            print_log(f'[DATASET] Open file {self.test_data_list_file}', logger = 'EngineeringShapeBenchmark')
+            with open(self.test_data_list_file, 'r') as f:
+                lines = lines + f.readlines()
+            
         self.file_list = []
+
         for line in lines:
             line = line.strip()
-            taxonomy_id = line.split('-')[0]
-            model_id = line.split('-')[1].split('.')[0]
+            category = line.split('/')[0] + '/' + line.split('/')[1]
+            object_name = line.split('/')[2]
             self.file_list.append({
-                'taxonomy_id': taxonomy_id,
-                'model_id': model_id,
+                'category': category,
+                'object_name': object_name,
                 'file_path': line
             })
-        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'ShapeNet-55')
+        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'EngineeringShapeBenchmark')
 
-        self.permutation = np.arange(self.npoints)
     def pc_norm(self, pc):
         """ pc: NxC, return NxC """
         centroid = np.mean(pc, axis=0)
@@ -91,24 +96,22 @@ class ShapeNet(data.Dataset):
         m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
         pc = pc / m
         return pc
-        
 
-    def random_sample(self, pc, num):
-        np.random.shuffle(self.permutation)
-        pc = pc[self.permutation[:num]]
-        return pc
-        
+    def stl_to_point_cloud(self, stl_path, n_points):
+        stl_file = os.path.join(self.data_root, stl_path)
+        mesh = trimesh.load_mesh(stl_file, force="mesh")
+        points, _ = trimesh.sample.sample_surface(mesh, n_points)
+        points = np.asarray(points, dtype=np.float32)
+        return points
+
     def __getitem__(self, idx):
         sample = self.file_list[idx]
-
-        data = IO.get(os.path.join(self.pc_path, sample['file_path'])).astype(np.float32)
-
-        data = self.random_sample(data, self.sample_points_num)
+        data = self.stl_to_point_cloud(sample['file_path'], self.sample_points_num)
         data = self.pc_norm(data)
         if self.rot:
             data = data @ rnd_rot()
         data = torch.from_numpy(data).float()
-        return sample['taxonomy_id'], sample['model_id'], (data, 0)
+        return sample['category'], sample['object_name'], (data, self.label_map[sample['category']])
 
     def __len__(self):
         return len(self.file_list)

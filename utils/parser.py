@@ -33,6 +33,7 @@ def get_args():
     parser.add_argument('--start_ckpts', type = str, default=None, help = 'reload used ckpt path')
     parser.add_argument('--ckpts', type = str, default=None, help = 'test used ckpt path')
     parser.add_argument('--val_freq', type = int, default=1, help = 'test freq')
+    parser.add_argument('--save_features', type = int, default=1, help = 'save features')
     parser.add_argument(
         '--resume', 
         action='store_true', 
@@ -43,6 +44,11 @@ def get_args():
         action='store_true', 
         default=False, 
         help = 'test mode for certain ckpt')
+    parser.add_argument(
+        '--test_retrieval', 
+        action='store_true', 
+        default=False, 
+        help = 'test retrieval for certain ckpt')
     parser.add_argument(
         '--finetune_model', 
         action='store_true', 
@@ -86,7 +92,7 @@ def get_args():
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
 
-    if args.test:
+    if args.test or args.test_retrieval:
         args.exp_name = 'test_' + args.exp_name
     if args.mode is not None:
         args.exp_name = args.exp_name + '_' +args.mode
