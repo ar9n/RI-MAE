@@ -10,10 +10,12 @@ This fork adapts the Rotation-Invariant Masked AutoEncoder (RI-MAE) for retrieva
 
 ## 1. Requirements
 Note: These instructions apply if the repository is used within a WSL-Ubuntu distribution
+
 GCC >= 4.9
 ```
 sudo apt install build-essential ninja-build
 ```
+
 CUDA >= 9.0
 https://docs.nvidia.com/cuda/wsl-user-guide/index.html
 
