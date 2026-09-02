@@ -9,7 +9,7 @@ In this work, we propose a novel Rotation Invariant Masked AutoEncoders for self
 </div>
 
 ## 1. Requirements
-PyTorch >= 1.7.0 < 1.11.0;
+PyTorch >= 1.7.0;
 python >= 3.7;
 CUDA >= 9.0;
 GCC >= 4.9;
