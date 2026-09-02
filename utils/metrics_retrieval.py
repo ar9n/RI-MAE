@@ -13,7 +13,7 @@ def evaluate(features, labels, batch_size=128):
 
     n = features.shape[0]
     if n <= 1:
-        return {"NN": 0.0, "FT": 0.0, "ST": 0.0, "mAP": 0.0}
+        return {"P@1": 0.0, "FT": 0.0, "ST": 0.0, "mAP": 0.0}
 
     # Normalize once
     features /= np.linalg.norm(features, axis=1, keepdims=True) + 1e-8
