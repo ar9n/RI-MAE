@@ -20,15 +20,16 @@ pip install -r requirements.txt
 ```
 
 ```
-# Chamfer Distance & emd
+# Chamfer Distance
 cd ./extensions/chamfer_dist
-python setup.py install --user
+pip install . --no-build-isolation
+# Earth mover's distance
 cd ./extensions/emd
-python setup.py install --user
+pip install . --no-build-isolation
 # PointNet++
 pip install "git+https://github.com/erikwijmans/Pointnet2_PyTorch.git#egg=pointnet2_ops&subdirectory=pointnet2_ops_lib"
 # GPU kNN
-pip install --upgrade https://github.com/unlimblue/KNN_CUDA/releases/download/0.2/KNN_CUDA-0.2-py3-none-any.whl
+pip install --upgrade https://github.com/altaykacan/KNN_CUDA_reborn/releases/download/0.2/KNN_CUDA-0.2-py3-none-any.whl
 ```
 
 ## 2. Datasets
