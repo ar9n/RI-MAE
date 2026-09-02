@@ -1,8 +1,8 @@
-# RI-MAE
+# RI-MAE for Retrieval
 
 ## RI-MAE: Rotation-Invariant Masked AutoEncoders for Self-Supervised Point Cloud Representation Learning, [ArXiv](https://arxiv.org/abs/2409.00353)
 
-In this work, we propose a novel Rotation Invariant Masked AutoEncoders for self-supervised learning on point clouds, namely RI-MAE. We first propose a RI-Transformer backbone to derive rotation-invariant latent space, with effective RI-OE and RI-PE. Based on RI-Transformer, RI-MAE employs a dual-branch design enables masked point patches reconstruction without rotation interference.
+This fork adapts the Rotation-Invariant Masked AutoEncoder (RI-MAE) for retrieval and similarity assessment of CAD and FE models.
 
 <div  align="center">    
  <img src="./figure/RI-MAE.jpg" align=center />
