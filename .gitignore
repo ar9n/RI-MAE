@@ -1,0 +1,17 @@
+data/MechanicalComponentsBenchmark
+data/EngineeringShapeBenchmark/Flat-Thin Wallcomponents
+data/EngineeringShapeBenchmark/Rectangular-Cubic Prism
+data/EngineeringShapeBenchmark/Solid Of Revolution
+data/ModelNet
+data/ModelNetFewshot
+data/ScanObjectNN
+data/ShapeNet55-34
+datasets/__pycache__
+experiments
+extensions/chamfer_dist/build
+extensions/emd/build
+models/__pycache__
+tools/__pycache__
+utils/__pycache__
+pointnet2_ops_lib/pointnet2_ops.egg-info
+pointnet2_ops_lib/build
