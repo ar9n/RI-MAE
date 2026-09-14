@@ -122,12 +122,12 @@ class TransformerEncoder(nn.Module):
 class EncoderWithTransformer(nn.Module):
     """ Tokenlizer and the Transformer Encoder
     """
-    def __init__(self, encoder_channel, embed_dim=768, depth=4, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
+    def __init__(self, encoder_channel, embed_dim=768, input_dim=3, depth=4, num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None,
         drop_rate=0., attn_drop_rate=0., drop_path_rate=0.):
         super().__init__()
 
         # define the encoder
-        self.encoder = Encoder(encoder_channel = encoder_channel)
+        self.encoder = Encoder(encoder_channel = encoder_channel, input_dim = input_dim)
         # bridge encoder and transformer
         self.reduce_dim = nn.Linear(encoder_channel, embed_dim)
         # define the transformer
@@ -185,6 +185,7 @@ class RI_MAE_Base(nn.Module):
         self.group_size = config.transformer_config.group_size
         self.num_group = config.transformer_config.num_group
         self.encoder_dims =  config.transformer_config.encoder_dims
+        self.input_dim = config.transformer_config.input_dim
         # self.laten_dims = 512
         self.laten_dims = self.trans_dim
         print_log(f'[Transformer args] {config.transformer_config}', logger = 'RI-MAE')
@@ -196,6 +197,7 @@ class RI_MAE_Base(nn.Module):
         # define the encoder
         self.encoder = EncoderWithTransformer(encoder_channel = self.encoder_dims,
                                               embed_dim = self.trans_dim,
+                                              input_dim = self.input_dim,
                                               depth = self.depth_encoder,
                                               drop_path_rate = dpr_encoder,
                                               num_heads = self.num_heads)
@@ -394,7 +396,7 @@ class RI_MAE_Base(nn.Module):
 
         B, G, M, C = neighborhood.shape
 
-        # rotaion invariant pos
+        # rotation invariant pos
         center = center.reshape(B*G, 1, 3)
         ori_mat_t = ori_mat.reshape(B*G, 3, 3)
         center = center @ ori_mat_t.transpose(-2, -1)
@@ -411,10 +413,10 @@ class RI_MAE_Base(nn.Module):
             else:
                 bool_masked_pos = self._mask_center_block(center, noaug = noaug) # B G
             bool_masked_pos = bool_masked_pos.to(center.device, non_blocking=True).flatten(1).to(torch.bool)
-            center_masked = center[bool_masked_pos].reshape(B, -1, C)
+            center_masked = center[bool_masked_pos].reshape(B, -1, 3)
             neighborhood_masked = neighborhood[bool_masked_pos].reshape(B, -1, M, C)
             ori_masked = ori_mat[bool_masked_pos].reshape(B, -1, 3, 3)
-            center_vis = center[~bool_masked_pos].reshape(B, -1, C)
+            center_vis = center[~bool_masked_pos].reshape(B, -1, 3)
             neighborhood_vis = neighborhood[~bool_masked_pos].reshape(B, -1, M, C)
             ori_vis = ori_mat[~bool_masked_pos].reshape(B, -1, 3, 3)
         else:
