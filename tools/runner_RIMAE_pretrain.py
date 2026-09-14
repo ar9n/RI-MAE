@@ -134,6 +134,8 @@ def run_net(args, config, train_writer=None, val_writer=None):
                 points = data[0].to(device)
             elif dataset_name == 'Replay':
                 points = data[0].to(device)
+            elif dataset_name == 'SFEMVert':
+                points = data[0].to(device)
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
 
@@ -281,23 +283,27 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
         dataset_name = config.dataset.val._base_.NAME
         if dataset_name == 'EngineeringShapeBenchmark':
             metrics = metrics_retrieval.evaluate(test_features, test_categories)
-            acc = metrics["P@1"]
+            metric_name = "P@1"
+            acc = metrics[metric_name]
             print_log(f"Retrieval metrics: {metrics}", logger=logger)
             if args.save_features:
                 json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
                 print_log(f"Saved feature dictionary to {json_path}", logger=logger)
         elif dataset_name == 'MechanicalComponentsBenchmark':
             metrics = metrics_retrieval.evaluate(test_features, test_categories)
-            acc = metrics["mAP"]
+            metric_name = "mAP"
+            acc = metrics[metric_name]
             print_log(f"Retrieval metrics: {metrics}", logger=logger)
             if args.save_features:
                 json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
                 print_log(f"Saved feature dictionary to {json_path}", logger=logger)
         else:
+            metric_name = 'ACC'
             acc = evaluate_svm(train_features, train_label, test_features, test_label)
 
         if rot:
             print_log('[Validation_ROT] EPOCH: %d  acc = %.4f' % (epoch,acc), logger=logger)
+            metric_name += "_rot"
         else: 
             print_log('[Validation] EPOCH: %d  acc = %.4f' % (epoch,acc), logger=logger)
 
@@ -306,7 +312,7 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
 
     # Add testing results to TensorBoard
     if val_writer is not None:
-        val_writer.add_scalar('Metric/ACC', acc, epoch)
+        val_writer.add_scalar(f'Metric/{metric_name}', acc, epoch)
 
     return Acc_Metric(acc)
 
