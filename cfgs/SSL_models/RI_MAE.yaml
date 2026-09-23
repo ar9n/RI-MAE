@@ -13,14 +13,13 @@ scheduler: {
 }}
 
 dataset : {
-  train : { _base_: cfgs/dataset_configs/ABC.yaml, 
-            others: {subset: 'train', npoints: 1024, whole: True, chunks: 7}},
-  #train : { _base_: cfgs/dataset_configs/ShapeNet-55.yaml, 
-            #others: {subset: 'train', npoints: 1024, whole: True}},
+  train : { _base_: cfgs/dataset_configs/SFEM.yaml, 
+            others: {subset: 'train', npoints: 1024, whole: True}},
   val : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'test', npoints: 1024, bs: 1, whole: True}},
+            others: {subset: 'test', npoints: 1024, bs: 1, whole: True, input_dim: 7}},
   val_rot : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
-            others: {subset: 'test', npoints: 1024, bs: 1, whole: True, rot: True}}}
+            others: {subset: 'test', npoints: 1024, bs: 1, whole: True, input_dim: 7, rot: True}}}
+            
 model : {
   NAME: RI_MAE, 
   mask_rand: True,
@@ -38,6 +37,7 @@ model : {
     group_size: 32, 
     num_group: 64, 
     encoder_dims: 256, 
+    input_dim: 7,
   },
 
   ema_decay: 0.99,

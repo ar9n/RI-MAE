@@ -7,4 +7,4 @@ import datasets.ESBDataset
 import datasets.MCBDataset
 import datasets.ABCDataset
 import datasets.ReplayDataset
-import datasets.SFEMVertDataset
+import datasets.SFEMDataset

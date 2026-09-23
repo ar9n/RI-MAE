@@ -41,7 +41,7 @@ def rnd_rot():
     return rot
 
 @DATASETS.register_module()
-class SFEMVert(data.Dataset):
+class SFEM(data.Dataset):
     def __init__(self, config):
         self.data_root = config.DATA_PATH
         self.subset = config.subset
@@ -51,7 +51,7 @@ class SFEMVert(data.Dataset):
 
         self.rot = config.get('rot', False)
 
-        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'SFEMVert')
+        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'SFEM')
         
         self.file_list = []
 
@@ -60,7 +60,7 @@ class SFEMVert(data.Dataset):
         elif self.subset == 'test' or self.whole:
             self._make_file_list(os.path.join(self.data_root, 'val'))
 
-        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'SFEMVert')
+        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'SFEM')
 
     def _make_file_list(self, path):
         for root, dirs, files in os.walk(path):
@@ -88,10 +88,10 @@ class SFEMVert(data.Dataset):
             u = f['/u'][()].astype(np.float64) # shape: (N, 3)
             stress = f['/VonMises'][()].astype(np.float64) # shape: (N, 1)
 
-            data = np.concatenate([vertices, fixed_facet, u, stress], axis=1) # shape: (N, 9)
+            data = np.concatenate([vertices, u, stress], axis=1) # shape: (N, 7)
 
         # Remove rows where fixed_facet is (0, 0), which indicates that the vertex is not on the surface
-        data = data[~((data[:, 3] == 0) & (data[:, 4] == 0))]
+        data = data[~((fixed_facet[:, 0] == 0) & (fixed_facet[:, 1] == 0))]
 
         sampled_ids = np.random.choice(data.shape[0], self.sample_points_num, replace=True)
         data = data[sampled_ids]

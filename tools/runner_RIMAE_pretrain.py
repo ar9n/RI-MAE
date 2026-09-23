@@ -134,7 +134,7 @@ def run_net(args, config, train_writer=None, val_writer=None):
                 points = data[0].to(device)
             elif dataset_name == 'Replay':
                 points = data[0].to(device)
-            elif dataset_name == 'SFEMVert':
+            elif dataset_name == 'SFEM':
                 points = data[0].to(device)
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
