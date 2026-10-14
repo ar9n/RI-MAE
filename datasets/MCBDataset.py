@@ -48,7 +48,7 @@ def rnd_rot():
     return rot
 
 @DATASETS.register_module()
-class MechanicalComponentsBenchmark(data.Dataset):
+class MCB(data.Dataset):
     def __init__(self, config):
         self.data_root = config.DATA_PATH
         self.subset = config.subset
@@ -68,7 +68,7 @@ class MechanicalComponentsBenchmark(data.Dataset):
 
         self.rot = config.get('rot', False)
 
-        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'MechanicalComponentsBenchmark')
+        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'MCB')
         
         self.file_list = []
 
@@ -78,7 +78,7 @@ class MechanicalComponentsBenchmark(data.Dataset):
         if self.whole or self.subset == 'test':
             self.fill_file_list(self.file_list, test_data_folder)
 
-        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'MechanicalComponentsBenchmark')
+        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'MCB')
 
     def _build_label_map(self, train_folder, test_folder, save_path):
         categories = set()
@@ -96,7 +96,7 @@ class MechanicalComponentsBenchmark(data.Dataset):
         label_map = {cat: idx for idx, cat in enumerate(sorted(categories))}
         with open(save_path, 'w', encoding='utf-8') as f:
             json.dump(label_map, f, indent=2)
-        print_log(f'[DATASET] label_map.json created with {len(label_map)} categories', logger='MechanicalComponentsBenchmark')
+        print_log(f'[DATASET] label_map.json created with {len(label_map)} categories', logger='MCB')
         return label_map
 
     def fill_file_list(self, file_list, data_folder):
@@ -135,7 +135,7 @@ class MechanicalComponentsBenchmark(data.Dataset):
                             vertices.append([float(parts[1]), float(parts[2]), float(parts[3])])
 
             if not vertices:
-                print_log(f'[WARNING] No vertices found: {obj_path}', logger='MechanicalComponentsBenchmark')
+                print_log(f'[WARNING] No vertices found: {obj_path}', logger='MCB')
                 return np.zeros((n_points, 3), dtype=np.float32)
 
             vertices = np.asarray(vertices, dtype=np.float32)
@@ -147,7 +147,7 @@ class MechanicalComponentsBenchmark(data.Dataset):
             return points.astype(np.float32)
 
         except Exception as e:
-            print_log(f'[WARNING] Failed to load {obj_path}: {e}', logger='MechanicalComponentsBenchmark')
+            print_log(f'[WARNING] Failed to load {obj_path}: {e}', logger='MCB')
             return np.zeros((n_points, 3), dtype=np.float32)
 
     def __getitem__(self, idx):

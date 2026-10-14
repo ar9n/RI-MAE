@@ -15,11 +15,11 @@ scheduler: {
 dataset : {
   train : { _base_: cfgs/dataset_configs/ReplayDataset.yaml, 
             others: {subset: 'train', npoints: 1024, whole: True,
-            target_dataset: { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, others: {subset: 'train', npoints: 1024, whole: True}},
+            target_dataset: { _base_: cfgs/dataset_configs/ESB.yaml, others: {subset: 'train', npoints: 1024, whole: True}},
             replay_dataset: { _base_: cfgs/dataset_configs/ShapeNet-55.yaml, others: {subset: 'train', npoints: 1024, whole: True}}}},
-  val : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
+  val : { _base_: cfgs/dataset_configs/ESB.yaml, 
             others: {subset: 'test', npoints: 1024, bs: 1, whole: True}},
-  val_rot : { _base_: cfgs/dataset_configs/EngineeringShapeBenchmark.yaml, 
+  val_rot : { _base_: cfgs/dataset_configs/ESB.yaml, 
             others: {subset: 'test', npoints: 1024, bs: 1, whole: True, rot: True}}}
 model : {
   NAME: RI_MAE, 

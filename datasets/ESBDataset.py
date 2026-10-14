@@ -42,7 +42,7 @@ def rnd_rot():
     return rot
 
 @DATASETS.register_module()
-class EngineeringShapeBenchmark(data.Dataset):
+class ESB(data.Dataset):
     def __init__(self, config):
         self.data_root = config.DATA_PATH
         self.subset = config.subset
@@ -58,15 +58,15 @@ class EngineeringShapeBenchmark(data.Dataset):
         self.rot = config.get('rot', False)
         self.input_dim = config.get('input_dim', 3)
 
-        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'EngineeringShapeBenchmark')
+        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'ESB')
         
         lines = []
         if self.whole or self.subset == 'train':
-            print_log(f'[DATASET] Open file {self.train_data_list_file}', logger = 'EngineeringShapeBenchmark')
+            print_log(f'[DATASET] Open file {self.train_data_list_file}', logger = 'ESB')
             with open(self.train_data_list_file, 'r') as f:
                 lines = lines + f.readlines()
         if self.whole or self.subset == 'test':
-            print_log(f'[DATASET] Open file {self.test_data_list_file}', logger = 'EngineeringShapeBenchmark')
+            print_log(f'[DATASET] Open file {self.test_data_list_file}', logger = 'ESB')
             with open(self.test_data_list_file, 'r') as f:
                 lines = lines + f.readlines()
             
@@ -81,7 +81,7 @@ class EngineeringShapeBenchmark(data.Dataset):
                 'object_name': object_name,
                 'file_path': line
             })
-        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'EngineeringShapeBenchmark')
+        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'ESB')
 
     def pc_norm(self, pc):
         """ pc: NxC, return NxC """
