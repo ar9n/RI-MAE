@@ -21,7 +21,7 @@ class IO:
 
     @classmethod
     def _read_npy(cls, file_path):
-        return np.load(file_path)
+        return np.load(file_path, allow_pickle=True)
        
     @classmethod
     def _read_pcd(cls, file_path):

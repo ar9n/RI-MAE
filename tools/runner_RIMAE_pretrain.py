@@ -126,16 +126,12 @@ def run_net(args, config, train_writer=None, val_writer=None):
             elif dataset_name == 'ModelNet':
                 points = data[0].to(device)
                 points = misc.fps(points, npoints)   
-            elif dataset_name == 'EngineeringShapeBenchmark':
+            elif dataset_name == 'ESB':
                 points = data.to(device)
-            elif dataset_name == 'MechanicalComponentsBenchmark':
+            elif dataset_name == 'MCB':
                 points = data.to(device)
-            elif dataset_name == 'ABC':
-                points = data[0].to(device)
-            elif dataset_name == 'Replay':
-                points = data[0].to(device)
-            elif dataset_name == 'SFEM':
-                points = data[0].to(device)
+            elif dataset_name in {'ABC', 'Replay', 'SFEM', 'Thingi10k'}:
+                points = data[0].to(device)            
             else:
                 raise NotImplementedError(f'Train phase do not support {dataset_name}')
 
@@ -281,15 +277,15 @@ def validate(base_model, extra_train_dataloader, test_dataloader, epoch, val_wri
             test_label = dist_utils.gather_tensor(test_label, args)
 
         dataset_name = config.dataset.val._base_.NAME
-        if dataset_name == 'EngineeringShapeBenchmark':
+        if dataset_name == 'ESB':
             metrics = metrics_retrieval.evaluate(test_features, test_categories)
-            metric_name = "P@1"
+            metric_name = "NN"
             acc = metrics[metric_name]
             print_log(f"Retrieval metrics: {metrics}", logger=logger)
             if args.save_features:
                 json_path = feature_dict.save_features(test_categories, test_object_names, test_features, epoch, acc, args)
                 print_log(f"Saved feature dictionary to {json_path}", logger=logger)
-        elif dataset_name == 'MechanicalComponentsBenchmark':
+        elif dataset_name == 'MCB':
             metrics = metrics_retrieval.evaluate(test_features, test_categories)
             metric_name = "mAP"
             acc = metrics[metric_name]
