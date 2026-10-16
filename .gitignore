@@ -1,5 +1,5 @@
-data/MechanicalComponentsBenchmark
-data/EngineeringShapeBenchmark/*
+data/MCB
+data/ESB/*/
 data/ModelNet
 data/ShapeNet55-34
 datasets/__pycache__
