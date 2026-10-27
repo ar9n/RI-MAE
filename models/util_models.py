@@ -20,35 +20,37 @@ class Group(nn.Module):
         self.group_size = group_size
         self.knn = KNN(k=self.group_size, transpose_mode=True)
 
-    def forward(self, xyz):
+    def forward(self, pc):
         '''
-            input: B N 3
+            input: B N D
             ---------------------------
-            output: B G M 3
-            center : B G 3
+            output: B G M D
+            center : B G D
         '''
-        batch_size, num_points, _ = xyz.shape
+        batch_size, num_points, input_dim = pc.shape
+        coords = pc[:,:,0:3].contiguous() # B N 3
         # fps the centers out
-        center = misc.fps(xyz, self.num_group) # B G 3
+        center = misc.fps(coords, self.num_group) # B G 3
         # knn to get the neighborhood
-        _, idx = self.knn(xyz, center) # B G M
+        _, idx = self.knn(coords, center) # B G M
         assert idx.size(1) == self.num_group
         assert idx.size(2) == self.group_size
-        idx_base = torch.arange(0, batch_size, device=xyz.device).view(-1, 1, 1) * num_points
+        idx_base = torch.arange(0, batch_size, device=pc.device).view(-1, 1, 1) * num_points
         idx = idx + idx_base
         idx = idx.view(-1)
-        neighborhood = xyz.view(batch_size * num_points, -1)[idx, :]
-        neighborhood = neighborhood.view(batch_size, self.num_group, self.group_size, 3).contiguous()
+        neighborhood = pc.view(batch_size * num_points, -1)[idx, :] # B N D
+        neighborhood = neighborhood.view(batch_size, self.num_group, self.group_size, input_dim).contiguous() # B G M D
         # normalize
-        neighborhood = neighborhood - center.unsqueeze(2)
+        neighborhood[:,:,:,0:3] = neighborhood[:,:,:,0:3] - center.unsqueeze(2)
         return neighborhood, center
 
 class Encoder(nn.Module):
-    def __init__(self, encoder_channel):
+    def __init__(self, encoder_channel, input_dim = 3):
         super().__init__()
         self.encoder_channel = encoder_channel
+        self.input_dim = input_dim
         self.first_conv = nn.Sequential(
-            nn.Conv1d(3, 128, 1),
+            nn.Conv1d(self.input_dim, 128, 1),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
             nn.Conv1d(128, 256, 1)
@@ -61,19 +63,19 @@ class Encoder(nn.Module):
         )
     def forward(self, point_groups):
         '''
-            point_groups : B G N 3
+            point_groups : B G M D
             -----------------
             feature_global : B G C
         '''
-        bs, g, n , _ = point_groups.shape
-        point_groups = point_groups.reshape(bs * g, n, 3)
+        B, G, M, D = point_groups.shape
+        point_groups = point_groups.reshape(B*G, M, D)
         # encoder
-        feature = self.first_conv(point_groups.transpose(2,1))  # BG 256 n
-        feature_global = torch.max(feature,dim=2,keepdim=True)[0]  # BG 256 1
-        feature = torch.cat([feature_global.expand(-1,-1,n), feature], dim=1)# BG 512 n
-        feature = self.second_conv(feature) # BG 1024 n
+        feature = self.first_conv(point_groups.transpose(2,1)) # BG 256 M
+        feature_global = torch.max(feature,dim=2,keepdim=True)[0] # BG 256 1
+        feature = torch.cat([feature_global.expand(-1,-1,M), feature], dim=1) # BG 512 M
+        feature = self.second_conv(feature) # BG 1024 M
         feature_global = torch.max(feature, dim=2, keepdim=False)[0] # BG 1024
-        return feature_global.reshape(bs, g, self.encoder_channel)
+        return feature_global.reshape(B, G, self.encoder_channel)
         
 def timeit(tag, t):
     print("{}: {}s".format(tag, time() - t))
@@ -379,24 +381,45 @@ class PointNetFeaturePropagation(nn.Module):
 
 def content_orientation_disentanglement(data):
     '''
-    :param data: the input point cloud, [B, G, M, 3]
+    :param data: input point cloud, [B, G, M, D]
+    Return:
+        rotated_data: [B, G, M, D], same shape as input
+        rot: [B, G, 3, 3], local rotation matrices for the first 3 dims
     '''
-    B, G, M, _ = data.shape
-    data = data.reshape(B*G, M, 3)
-    data_copy = data                       
-    data = data.transpose(2, 1)     
-    data = data - data.mean(axis=-1,keepdims=True)  
-    data_T = data.transpose(2, 1) 
-    H = torch.matmul(data, data_T)
-    eigenvectors, eigenvalues, _ = torch.linalg.svd(H, full_matrices=True)
-    data_copy = torch.matmul(data_copy, eigenvectors)
-    center = torch.mean(data_copy, dim=1, keepdim=True)
+    B, G, M, D = data.shape
+
+    # only rotate spatial coordinates; keep extra features unchanged
+    coords = data[..., :3].reshape(B * G, M, 3)
+    coords_copy = coords.clone()
+
+    # center the coordinates
+    coords = coords.transpose(2, 1)          # [BG, 3, M]
+    coords = coords - coords.mean(dim=-1, keepdim=True)
+    coords_T = coords.transpose(2, 1)        # [BG, M, 3]
+    H = torch.matmul(coords, coords_T)        # [BG, 3, 3]
+
+    # principal axes from the 3D covariance
+    eigenvectors, _, _ = torch.linalg.svd(H, full_matrices=True)
+
+    # rotate only the 3D coordinates
+    coords_rot = torch.matmul(coords_copy, eigenvectors)
+
+    # sign ambiguity fix for consistent orientation
+    center = torch.mean(coords_rot, dim=1, keepdim=True)
     sign = torch.sign(center)
-    sign[sign==0] = 1
-    data_copy = data_copy * sign
-    data_copy = data_copy.reshape(B, G, M, 3)
+    sign[sign == 0] = 1
+    coords_rot = coords_rot * sign
 
     eigenvectors = eigenvectors * sign
     eigenvectors = eigenvectors.transpose(2, 1)
-    eigenvectors = eigenvectors.reshape(B, G, 3, 3)
-    return data_copy, eigenvectors
+
+    coords_rot = coords_rot.reshape(B, G, M, 3)
+
+    if D > 3:
+        features = data[..., 3:].reshape(B, G, M, D - 3)
+        rotated_data = torch.cat([coords_rot, features], dim=-1)
+    else:
+        rotated_data = coords_rot
+
+    rot = eigenvectors.reshape(B, G, 3, 3)
+    return rotated_data, rot

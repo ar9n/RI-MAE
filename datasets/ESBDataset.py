@@ -8,13 +8,6 @@ from pathlib import Path
 from .build import DATASETS
 from utils.logger import *
 
-def pc_normalize(pc):
-    centroid = np.mean(pc, axis=0)
-    pc = pc - centroid
-    m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
-    pc = pc / m
-    return pc
-
 def rotmat(a, b, c, hom_coord=False):  # apply to mesh using mesh.apply_transform(rotmat(a,b,c, True))
     """
     Create a rotation matrix with an optional fourth homogeneous coordinate
@@ -49,7 +42,7 @@ def rnd_rot():
     return rot
 
 @DATASETS.register_module()
-class EngineeringShapeBenchmark(data.Dataset):
+class ESB(data.Dataset):
     def __init__(self, config):
         self.data_root = config.DATA_PATH
         self.subset = config.subset
@@ -63,16 +56,17 @@ class EngineeringShapeBenchmark(data.Dataset):
         self.whole = config.get('whole')
 
         self.rot = config.get('rot', False)
+        self.input_dim = config.get('input_dim', 3)
 
-        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'EngineeringShapeBenchmark')
+        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'ESB')
         
         lines = []
         if self.whole or self.subset == 'train':
-            print_log(f'[DATASET] Open file {self.train_data_list_file}', logger = 'EngineeringShapeBenchmark')
+            print_log(f'[DATASET] Open file {self.train_data_list_file}', logger = 'ESB')
             with open(self.train_data_list_file, 'r') as f:
                 lines = lines + f.readlines()
         if self.whole or self.subset == 'test':
-            print_log(f'[DATASET] Open file {self.test_data_list_file}', logger = 'EngineeringShapeBenchmark')
+            print_log(f'[DATASET] Open file {self.test_data_list_file}', logger = 'ESB')
             with open(self.test_data_list_file, 'r') as f:
                 lines = lines + f.readlines()
             
@@ -87,7 +81,7 @@ class EngineeringShapeBenchmark(data.Dataset):
                 'object_name': object_name,
                 'file_path': line
             })
-        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'EngineeringShapeBenchmark')
+        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'ESB')
 
     def pc_norm(self, pc):
         """ pc: NxC, return NxC """
@@ -111,6 +105,9 @@ class EngineeringShapeBenchmark(data.Dataset):
         if self.rot:
             data = data @ rnd_rot()
         data = torch.from_numpy(data).float()
+        if self.input_dim - 3 > 0:
+            extra_dims = torch.zeros((data.shape[0], self.input_dim - 3), dtype=torch.float32)
+            data = torch.cat((data, extra_dims), dim=1)
         return sample['category'], sample['object_name'], (data, self.label_map[sample['category']])
 
     def __len__(self):

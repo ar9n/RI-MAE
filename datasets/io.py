@@ -21,7 +21,7 @@ class IO:
 
     @classmethod
     def _read_npy(cls, file_path):
-        return np.load(file_path)
+        return np.load(file_path, allow_pickle=True)
        
     @classmethod
     def _read_pcd(cls, file_path):
@@ -36,4 +36,7 @@ class IO:
     @classmethod
     def _read_h5(cls, file_path):
         f = h5py.File(file_path, 'r')
-        return f['data'][()]
+        if 'data' not in f:
+            return f
+        else:
+            return f['data'][()]
