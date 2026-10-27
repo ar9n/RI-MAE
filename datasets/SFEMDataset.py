@@ -51,6 +51,8 @@ class SFEM(data.Dataset):
 
         self.rot = config.get('rot', False)
 
+        self.data_type = config.get('data_type', 'results') # 'results' or 'bcs'
+
         print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'SFEM')
         
         self.file_list = []
@@ -88,10 +90,13 @@ class SFEM(data.Dataset):
             u = f['/u'][()].astype(np.float64) # shape: (N, 3)
             stress = f['/VonMises'][()].astype(np.float64) # shape: (N, 1)
 
+        if self.data_type == 'results':
+            # Sample from boundary and interior vertices
             data = np.concatenate([vertices, u, stress], axis=1) # shape: (N, 7)
-
-        # Remove rows where fixed_facet is (0, 0), which indicates that the vertex is not on the surface
-        data = data[~((fixed_facet[:, 0] == 0) & (fixed_facet[:, 1] == 0))]
+        elif self.data_type == 'bcs':
+            data = np.concatenate([vertices, fixed_facet[:, 0:1]], axis=1) # shape: (N, 4)
+            # Remove rows where fixed_facet is (0, 0), which indicates that the vertex is not on the surface
+            data = data[~((fixed_facet[:, 0] == 0) & (fixed_facet[:, 1] == 0))]
 
         sampled_ids = np.random.choice(data.shape[0], self.sample_points_num, replace=True)
         data = data[sampled_ids]
