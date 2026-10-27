@@ -1,3 +1,4 @@
+build
 data/MCB
 data/ESB/*/
 data/ModelNet
@@ -7,6 +8,7 @@ experiments
 extensions/chamfer_dist/build
 extensions/emd/build
 models/__pycache__
+rimae.egg-info
 tools/__pycache__
 utils/__pycache__
 pointnet2_ops_lib/pointnet2_ops.egg-info

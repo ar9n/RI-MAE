@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rimae"
+version = "0.1.0"
+description = "Rotation-Invariant Masked Autoencoder for point clouds"
+readme = "README.md"
+requires-python = ">=3.8"
+
+# Install the dependencies declared in requirements.txt separately
+# via install.py, since pip does not support including a requirements
+# file directly in this field.
+dependencies = []
+
+[tool.setuptools]
+py-modules = ["main_RIMAE"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "models*",
+    "datasets*",
+    "tools*",
+    "utils*",
+]
+namespaces = true
