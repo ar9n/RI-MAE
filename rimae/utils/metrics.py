@@ -8,7 +8,7 @@
 import logging
 import open3d
 import torch
-from chamfer import ChamferDistanceL1, ChamferDistanceL2
+from extensions.chamfer_dist import ChamferDistanceL1, ChamferDistanceL2
 
 
 class Metrics(object):
