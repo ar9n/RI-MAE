@@ -5,9 +5,9 @@ from time import time
 import numpy as np
 from pointnet2_ops import pointnet2_utils
 from .build import MODELS
-from utils import misc
-from utils.checkpoint import get_missing_parameters_message, get_unexpected_parameters_message
-from utils.logger import *
+from ..utils import misc
+from ..utils.checkpoint import get_missing_parameters_message, get_unexpected_parameters_message
+from ..utils.logger import *
 
 #from utils.knn_torch import KNN
 from knn_cuda import KNN

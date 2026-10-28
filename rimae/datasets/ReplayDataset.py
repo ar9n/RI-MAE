@@ -6,7 +6,7 @@ import numpy as np
 import torch.utils.data as data
 from pathlib import Path
 from .build import DATASETS, build_dataset_from_cfg
-from utils.logger import *
+from ..utils.logger import *
 import random
 
 

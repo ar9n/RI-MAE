@@ -6,7 +6,7 @@ import numpy as np
 import torch.utils.data as data
 from pathlib import Path
 from .build import DATASETS
-from utils.logger import *
+from ..utils.logger import *
 
 def rotmat(a, b, c, hom_coord=False):  # apply to mesh using mesh.apply_transform(rotmat(a,b,c, True))
     """

@@ -5,7 +5,7 @@ import numpy as np
 import torch.utils.data as data
 from pathlib import Path
 from .build import DATASETS
-from utils.logger import *
+from ..utils.logger import *
 
 def pc_normalize(pc):
     centroid = np.mean(pc, axis=0)
