@@ -7,17 +7,17 @@ from timm.models.layers import DropPath, trunc_normal_
 
 from .util_models import Group
 from .util_models import Encoder, content_orientation_disentanglement
-from models.ema import EMA
+from .ema import EMA
 
 from .build import MODELS
-from utils.checkpoint import get_missing_parameters_message, get_unexpected_parameters_message
-from utils.logger import *
+from ..utils.checkpoint import get_missing_parameters_message, get_unexpected_parameters_message
+from ..utils.logger import *
 import random
 import numpy as np
 import copy
 
 from torchvision import transforms
-from datasets import data_transforms
+from ..datasets import data_transforms
 train_transforms = transforms.Compose(
     [
         data_transforms.PointcloudScaleAndTranslate(),

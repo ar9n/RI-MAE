@@ -1,11 +1,11 @@
 import os
-from tools import RIMAE_pretrain_run_net as pretrain
-from tools import RIMAE_finetune_run_net as finetune
-from tools import RIMAE_pretrain_test_net as test_retrieval
-from tools import RIMAE_finetune_test_net as test
-from utils import parser, dist_utils, misc
-from utils.logger import *
-from utils.config import *
+from rimae.tools import RIMAE_pretrain_run_net as pretrain
+from rimae.tools import RIMAE_finetune_run_net as finetune
+from rimae.tools import RIMAE_pretrain_test_net as test_retrieval
+from rimae.tools import RIMAE_finetune_test_net as test
+from rimae.utils import parser, dist_utils, misc
+from rimae.utils.logger import *
+from rimae.utils.config import *
 import time
 import torch
 from tensorboardX import SummaryWriter

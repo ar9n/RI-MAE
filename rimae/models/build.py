@@ -1,10 +1,10 @@
-from utils import registry
+from ..utils import registry
 
 
-DATASETS = registry.Registry('dataset')
+MODELS = registry.Registry('models')
 
 
-def build_dataset_from_cfg(cfg, default_args = None):
+def build_model_from_cfg(cfg, **kwargs):
     """
     Build a dataset, defined by `dataset_name`.
     Args:
@@ -12,6 +12,6 @@ def build_dataset_from_cfg(cfg, default_args = None):
     Returns:
         Dataset: a constructed dataset specified by dataset_name.
     """
-    return DATASETS.build(cfg, default_args = default_args)
+    return MODELS.build(cfg, **kwargs)
 
 

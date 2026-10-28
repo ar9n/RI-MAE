@@ -4,7 +4,7 @@ import numpy as np
 import torch.utils.data as data
 from .io import IO
 from .build import DATASETS
-from utils.logger import *
+from ..utils.logger import *
 
 def pc_normalize(pc):
     centroid = np.mean(pc, axis=0)
@@ -47,7 +47,7 @@ def rnd_rot():
     return rot
 
 @DATASETS.register_module()
-class ABC(data.Dataset):
+class Thingi10k(data.Dataset):
     def __init__(self, config):
         self.data_root = config.DATA_PATH
         self.subset = config.subset
@@ -59,23 +59,19 @@ class ABC(data.Dataset):
 
         self.rot = config.get('rot', False)
 
-        self.num_chunks = config.get('chunks', 100)
-
-        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'ABC')
+        print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'Thingi10k')
         
         self.file_list = []
 
         for root, dirs, files in os.walk(self.data_root):
             for f in files:
                 if f.endswith('.npy'):
-                    chunk = root.split('/')[-1]
-                    chunk_idx = int(chunk[6:])
-                    if chunk_idx < self.num_chunks:
-                        self.file_list.append({
-                            'chunk': chunk_idx,
-                            'file_name': f,
-                            'file_path': os.path.join(root, f)
-                        })
+                    mesh_type = root.split('/')[-1]
+                    self.file_list.append({
+                        'mesh_type': mesh_type,
+                        'file_name': f,
+                        'file_path': os.path.join(root, f)
+                    })
 
         if not self.whole:
             if self.subset == 'train':
@@ -83,7 +79,7 @@ class ABC(data.Dataset):
             elif self.subset == 'test':
                 self.file_list = self.file_list[int(len(self.file_list) * self.train_test_split):]  
 
-        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'ABC')
+        print_log(f'[DATASET] {len(self.file_list)} instances were loaded', logger = 'Thingi10k')
 
     def pc_norm(self, pc):
         """ pc: NxC, return NxC """
@@ -96,14 +92,19 @@ class ABC(data.Dataset):
     def __getitem__(self, idx):
         sample = self.file_list[idx]
 
-        data = IO.get(sample['file_path']).astype(np.float32)
+        data_dict = IO.get(sample['file_path']).item()
+        data = np.concatenate((
+            data_dict['centroids'],
+            data_dict['volumes'].reshape(-1, 1),
+            data_dict['element_quality'].reshape(-1, 1)
+        ), axis=1)
         sampled_ids = np.random.choice(data.shape[0], 1024, replace=True)
         data = data[sampled_ids]
         data = self.pc_norm(data)
         if self.rot:
             data = data @ rnd_rot()
         data = torch.from_numpy(data).float()
-        return sample['chunk'], sample['file_name'], (data, 0)
+        return sample['mesh_type'], sample['file_name'], (data, 0)
 
     def __len__(self):
         return len(self.file_list)

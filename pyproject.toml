@@ -21,9 +21,6 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
-    "models*",
-    "datasets*",
-    "tools*",
-    "utils*",
+    "rimae*",
 ]
 namespaces = true
