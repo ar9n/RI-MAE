@@ -3,8 +3,8 @@ from pathlib import Path
 from setuptools import setup, find_packages
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
-CHAMFER_DIR = "extensions/chamfer_dist"
-EMD_DIR = "extensions/emd"
+CHAMFER_DIR = "rimae/extensions/chamfer_dist"
+EMD_DIR = "rimae/extensions/emd"
 
 ext_modules = [
     CUDAExtension(
