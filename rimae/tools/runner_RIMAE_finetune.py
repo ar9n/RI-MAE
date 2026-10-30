@@ -223,9 +223,6 @@ def validate(base_model, test_dataloader, epoch, val_writer, args, config, logge
 
     test_pred  = []
     test_label = []
-    test_features = []
-    test_object_names = []
-    test_categories = []
     npoints = config.npoints
     with torch.no_grad():
         for idx, (taxonomy_ids, model_ids, data) in enumerate(test_dataloader):
@@ -235,32 +232,21 @@ def validate(base_model, test_dataloader, epoch, val_writer, args, config, logge
             points = misc.fps(points, npoints)
 
             logits = base_model(points)
-            features = base_model.get_feature(points)
             target = label.view(-1)
 
             pred = logits.argmax(-1).view(-1)
 
             test_pred.append(pred.detach())
             test_label.append(target.detach())
-            test_features.append(features.detach())
-            test_object_names.extend(list(model_ids))
-            test_categories.extend(list(taxonomy_ids))
 
         test_pred = torch.cat(test_pred, dim=0)
         test_label = torch.cat(test_label, dim=0)
-        test_features = torch.cat(test_features, dim=0)
 
         if args.distributed:
             test_pred = dist_utils.gather_tensor(test_pred, args)
             test_label = dist_utils.gather_tensor(test_label, args)
-            test_features = dist_utils.gather_tensor(test_features, args)
 
-        if config.get('evaluate_retrieval_acc'):
-            acc = evaluate_nn_precision(test_features.cpu().numpy(), test_label.cpu().numpy()) * 100.
-            json_path = feature_dict.save_features(test_categories, test_object_names, test_features.cpu().numpy(), 0, acc, args)
-            print_log(f"Saved feature dictionary to {json_path}", logger=logger)
-        else:
-            acc = (test_pred == test_label).sum() / float(test_label.size(0)) * 100.
+        acc = (test_pred == test_label).sum() / float(test_label.size(0)) * 100.
         print_log('[Validation] EPOCH: %d  acc = %.4f' % (epoch, acc), logger=logger)
 
         if args.distributed:

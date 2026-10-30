@@ -67,6 +67,7 @@ class MCB(data.Dataset):
         self.whole = config.get('whole')
 
         self.rot = config.get('rot', False)
+        self.input_dim = config.get('input_dim', 3)
 
         print_log(f'[DATASET] sample out {self.sample_points_num} points', logger = 'MCB')
         
@@ -157,6 +158,9 @@ class MCB(data.Dataset):
         if self.rot:
             data = data @ rnd_rot()
         data = torch.from_numpy(data).float()
+        if self.input_dim - 3 > 0:
+            extra_dims = torch.zeros((data.shape[0], self.input_dim - 3), dtype=torch.float32)
+            data = torch.cat((data, extra_dims), dim=1)
         return sample['category'], sample['object_name'], (data, self.label_map[sample['category']])
 
     def __len__(self):

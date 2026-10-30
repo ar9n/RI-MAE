@@ -501,12 +501,14 @@ class RITransformer_MAE(nn.Module):
         self.group_size = config.group_size
         self.num_group = config.num_group
         self.encoder_dims =  config.encoder_dims
+        self.input_dim = config.input_dim
 
         # grouper
         self.group_divider = Group(num_group = self.num_group, group_size = self.group_size)
         # define the encoder
         dpr = [x.item() for x in torch.linspace(0, self.drop_path_rate, self.depth)]
         self.encoder = EncoderWithTransformer(encoder_channel = self.encoder_dims,
+                                            input_dim = self.input_dim,
                                             embed_dim = self.trans_dim,
                                             depth = self.depth,
                                             drop_path_rate = dpr,
@@ -554,7 +556,7 @@ class RITransformer_MAE(nn.Module):
         return loss, acc * 100
 
     def load_model_from_ckpt(self, bert_ckpt_path):
-        ckpt = torch.load(bert_ckpt_path)
+        ckpt = torch.load(bert_ckpt_path, weights_only=False)
         base_ckpt = {k.replace("module.student.", ""): v for k, v in ckpt['base_model'].items()}
         incompatible = self.load_state_dict(base_ckpt, strict=False)
 
